@@ -48,11 +48,16 @@ nockd deploy nockchain --bin /path/to/nockchain --restart always \
   --health-addr 127.0.0.1:5555 \
   --status-label BLOCK \
   --status-cmd 'grep -oE "height [0-9]+" "$NOCKD_LOG" | tail -1 | grep -oE "[0-9]+"' \
-  -- --bind-private-grpc-addr 127.0.0.1:5555
+  -- --bind-private-grpc-addr 127.0.0.1:5555 --color never
 #   (no --jam; observer = no --mine; dials default peers to sync; the node's
 #    cwd-relative ./.data.nockchain state lands inside nockd's per-app state dir.
+#    --color never: nockchain emits ANSI color codes even when piped (default --color
+#      auto); pass `never` so logs + the status grep are clean. nockd's dashboard/TUI
+#      also strip ANSI defensively.
 #    --status-cmd runs every 5s with cwd=state dir and NOCKD_LOG/NOCKD_ENDPOINT set;
-#    its first stdout line shows up in ps, the TUI, and the dashboard tile band.)
+#      its first stdout line shows up in ps, the TUI, and the dashboard tile band.
+#      The grep above is a TEMPLATE — check `nockd logs nockchain` for the node's
+#      actual height line and adjust the pattern to match.)
 
 nockd ps                                       # fleet + state + health
 nockd dash                                     # live TUI (↑/↓ select · r/s/x · q quit)

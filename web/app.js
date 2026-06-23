@@ -7,6 +7,8 @@ let dispose = () => {};
 // ---- helpers ----
 const $ = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// Strip ANSI/VT100 escape sequences (apps like nockchain emit color codes even when piped).
+const stripAnsi = (s) => String(s ?? '').replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
 const STATUSES = ['running', 'degraded', 'crashing', 'stopped'];
 const statusClass = (s) => (STATUSES.includes(s) ? s : 'stopped');
 const glyph = (s) => `<span class="glyph ${statusClass(s)}"></span>`;
@@ -223,7 +225,7 @@ function detailView(name) {
     es = new EventSource(`/api/v1/apps/${encodeURIComponent(name)}/logs`);
     es.onmessage = (m) => {
       const line = document.createElement('div');
-      line.innerHTML = colorVerbs(esc(m.data));
+      line.innerHTML = colorVerbs(esc(stripAnsi(m.data)));
       pre.append(line);
       box.scrollTop = box.scrollHeight;
     };

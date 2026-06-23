@@ -109,7 +109,30 @@ async fn refresh(client: &Client, state: &mut State) {
         state.selected = state.apps.len() - 1;
     }
     let name = state.apps[state.selected].name.clone();
-    state.logs = client.logs(&name, 400).await.unwrap_or_default();
+    state.logs = strip_ansi(&client.logs(&name, 400).await.unwrap_or_default());
+}
+
+/// Remove ANSI/VT100 escape sequences so ratatui doesn't render raw `\x1b[..m` bytes
+/// (apps like nockchain emit color codes even when their output is piped).
+fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\u{1b}' {
+            if chars.peek() == Some(&'[') {
+                chars.next();
+                while let Some(&n) = chars.peek() {
+                    chars.next();
+                    if n.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
 
 async fn action(client: &Client, state: &mut State, verb: &str) {
