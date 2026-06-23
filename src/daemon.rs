@@ -124,6 +124,10 @@ async fn run_status_cmd(
 }
 
 pub async fn serve(daemon: Arc<Daemon>, host: IpAddr, port: u16) -> Result<()> {
+    // Re-adopt any apps that survived a previous daemon (process-group isolated), so we
+    // don't spawn conflicting duplicates (OQ6).
+    daemon.supervisor.reattach(&daemon.registry);
+
     // Background reconcile loop (DESIGN §5.1).
     let bg = daemon.clone();
     tokio::spawn(async move {

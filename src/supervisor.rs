@@ -33,7 +33,11 @@ pub enum RunState {
 }
 
 struct Managed {
+    /// Set when this daemon spawned the process and owns its handle. `None` + `adopted` means
+    /// a process re-adopted from a previous daemon, monitored by pid.
     child: Option<Child>,
+    /// True for a re-adopted process (no owned `Child`; liveness checked via the pid).
+    adopted: bool,
     pid: Option<u32>,
     started_at: i64,
     restarts: u32,
@@ -54,6 +58,7 @@ impl Default for Managed {
     fn default() -> Self {
         Managed {
             child: None,
+            adopted: false,
             pid: None,
             started_at: 0,
             restarts: 0,
@@ -152,45 +157,60 @@ impl Supervisor {
 
         let mut procs = self.procs.lock().unwrap();
 
-        // Reap exited children, escalate stalled terminations, and update state.
+        // Reap exited processes — owned children via try_wait, re-adopted ones via pid
+        // liveness — escalate stalled terminations, and update state.
         for (name, m) in procs.iter_mut() {
-            if let Some(child) = m.child.as_mut() {
+            let exited: Option<i32> = if let Some(child) = m.child.as_mut() {
                 match child.try_wait() {
-                    Ok(Some(status)) => {
-                        m.child = None;
-                        m.pid = None;
-                        let code = status.code().unwrap_or(-1);
-                        if m.restart_requested {
-                            // Operator-initiated restart: no penalty, restart next tick.
-                            m.restart_requested = false;
-                            m.term_deadline = None;
-                            m.backoff_until = 0;
-                            m.state = RunState::Backoff;
-                        } else if m.term_deadline.is_some() {
-                            // Intentional stop (SIGTERM): clean, no crash/backoff.
-                            m.term_deadline = None;
-                            m.state = RunState::Stopped;
-                            m.health = HealthState::Unknown;
-                            m.status_line = None;
-                            let _ = registry.add_event(name, "stop", "stopped");
-                        } else {
-                            m.restarts += 1;
-                            m.backoff_until = now_secs() + backoff_secs(m.restarts);
-                            m.state = RunState::Backoff;
-                            warn!(app = %name, code, "instance exited");
-                            let _ = registry.add_event(name, "crash", &format!("exit code {code}"));
-                        }
+                    Ok(Some(status)) => Some(status.code().unwrap_or(-1)),
+                    Ok(None) => None,
+                    Err(e) => {
+                        warn!(app = %name, error = %e, "try_wait failed");
+                        None
                     }
-                    Ok(None) => {
-                        // Still alive: if a graceful term has timed out, escalate to SIGKILL.
-                        if let Some(deadline) = m.term_deadline {
-                            if now_secs() >= deadline {
-                                warn!(app = %name, "graceful stop timed out; sending SIGKILL");
-                                let _ = child.start_kill();
-                            }
-                        }
-                    }
-                    Err(e) => warn!(app = %name, error = %e, "try_wait failed"),
+                }
+            } else if m.adopted {
+                match m.pid {
+                    Some(pid) if !pid_alive(pid) => Some(-1), // adopted: exit code unknown
+                    _ => None,
+                }
+            } else {
+                None
+            };
+
+            if let Some(code) = exited {
+                m.child = None;
+                m.pid = None;
+                m.adopted = false;
+                let _ = std::fs::remove_file(self.paths.pid_file(name));
+                if m.restart_requested {
+                    // Operator-initiated restart: no penalty, restart next tick.
+                    m.restart_requested = false;
+                    m.term_deadline = None;
+                    m.backoff_until = 0;
+                    m.state = RunState::Backoff;
+                } else if m.term_deadline.is_some() {
+                    // Intentional stop (SIGTERM): clean, no crash/backoff.
+                    m.term_deadline = None;
+                    m.state = RunState::Stopped;
+                    m.health = HealthState::Unknown;
+                    m.status_line = None;
+                    let _ = registry.add_event(name, "stop", "stopped");
+                } else {
+                    m.restarts += 1;
+                    m.backoff_until = now_secs() + backoff_secs(m.restarts);
+                    m.state = RunState::Backoff;
+                    warn!(app = %name, code, "instance exited");
+                    let _ = registry.add_event(name, "crash", &format!("exit code {code}"));
+                }
+                continue;
+            }
+
+            // Still alive: if a graceful termination has timed out, escalate to SIGKILL.
+            if m.term_deadline.is_some_and(|d| now_secs() >= d) {
+                if let Some(pid) = m.pid {
+                    warn!(app = %name, "graceful stop timed out; sending SIGKILL");
+                    send_kill(pid);
                 }
             }
         }
@@ -199,10 +219,11 @@ impl Supervisor {
         let tracked: Vec<String> = procs.keys().cloned().collect();
         for name in tracked {
             if !desired_names.contains(name.as_str()) {
-                if let Some(mut m) = procs.remove(&name) {
-                    if let Some(child) = m.child.as_mut() {
-                        let _ = child.start_kill();
+                if let Some(m) = procs.remove(&name) {
+                    if let Some(pid) = m.pid {
+                        send_kill(pid);
                     }
+                    let _ = std::fs::remove_file(self.paths.pid_file(&name));
                 }
             }
         }
@@ -211,8 +232,10 @@ impl Supervisor {
         for app in &apps {
             let entry = procs.entry(app.name.clone()).or_default();
 
+            let running = entry.child.is_some() || entry.adopted;
+
             if app.desired_status == "stopped" {
-                if entry.child.is_some() {
+                if running {
                     // Begin a graceful stop once; reap/escalation drives it to completion.
                     if entry.term_deadline.is_none() {
                         if let Some(pid) = entry.pid {
@@ -232,8 +255,7 @@ impl Supervisor {
             }
 
             // desired running
-            let alive = entry.child.is_some();
-            if alive {
+            if running {
                 // A pending termination (e.g. a graceful restart) shows as Stopping.
                 entry.state = if entry.term_deadline.is_some() {
                     RunState::Stopping
@@ -253,13 +275,22 @@ impl Supervisor {
 
             match self.spawn(app, store) {
                 Ok(child) => {
-                    entry.pid = child.id();
+                    let pid = child.id();
+                    entry.pid = pid;
                     entry.child = Some(child);
+                    entry.adopted = false;
                     entry.started_at = now_secs();
                     entry.state = RunState::Running;
                     entry.health = HealthState::Unknown;
                     entry.term_deadline = None;
                     entry.restart_requested = false;
+                    // Record the pid for re-adoption if this daemon restarts.
+                    if let Some(pid) = pid {
+                        let _ = std::fs::write(
+                            self.paths.pid_file(&app.name),
+                            format!("{pid} {}", entry.started_at),
+                        );
+                    }
                     info!(app = %app.name, pid = ?entry.pid, "instance started");
                     let _ = registry.add_event(&app.name, "start", "instance started");
                 }
@@ -296,9 +327,72 @@ impl Supervisor {
             .args(&app.args)
             .stdout(Stdio::from(out))
             .stderr(Stdio::from(err))
+            // Own process group: a supervised app must NOT receive the daemon's controlling-
+            // terminal signals. Otherwise Ctrl-C'ing `nockd serve` SIGINTs every app too
+            // (nockchain was exiting 130/143 for exactly this reason). nockd still stops apps
+            // deliberately via kill(pid, …).
+            .process_group(0)
             .spawn()
             .with_context(|| format!("spawning {}", bin.display()))?;
         Ok(child)
+    }
+
+    /// Re-adopt an already-running process (a survivor of a previous daemon) by pid, so a
+    /// daemon restart doesn't orphan it and spawn a conflicting duplicate (OQ6).
+    pub fn adopt(&self, name: &str, pid: u32, started_at: i64) {
+        let mut procs = self.procs.lock().unwrap();
+        let m = procs.entry(name.to_string()).or_default();
+        m.child = None;
+        m.adopted = true;
+        m.pid = Some(pid);
+        m.started_at = started_at;
+        m.state = RunState::Running;
+        m.health = HealthState::Unknown;
+        info!(app = %name, pid, "re-adopted running instance");
+    }
+
+    /// On daemon startup, re-adopt any desired-running app whose recorded pid is still alive
+    /// (it survived a daemon restart thanks to its own process group). Stale pidfiles are
+    /// cleaned. Note: relies on pid liveness; a recycled pid is a small, accepted risk.
+    pub fn reattach(&self, registry: &Registry) {
+        let apps = match registry.list_apps() {
+            Ok(a) => a,
+            Err(_) => return,
+        };
+        for app in apps {
+            if app.desired_status != "running" {
+                continue;
+            }
+            let pidfile = self.paths.pid_file(&app.name);
+            let Ok(contents) = std::fs::read_to_string(&pidfile) else {
+                continue;
+            };
+            let mut parts = contents.split_whitespace();
+            let Some(pid) = parts.next().and_then(|s| s.parse::<u32>().ok()) else {
+                continue;
+            };
+            let started_at = parts
+                .next()
+                .and_then(|s| s.parse::<i64>().ok())
+                .unwrap_or_else(now_secs);
+            if pid_alive(pid) {
+                self.adopt(&app.name, pid, started_at);
+            } else {
+                let _ = std::fs::remove_file(&pidfile);
+            }
+        }
+    }
+}
+
+/// Whether a pid is alive (kill with signal 0 probes existence without delivering a signal).
+fn pid_alive(pid: u32) -> bool {
+    unsafe { libc::kill(pid as libc::pid_t, 0) == 0 }
+}
+
+/// Force-kill a process by pid (SIGKILL).
+fn send_kill(pid: u32) {
+    unsafe {
+        libc::kill(pid as libc::pid_t, libc::SIGKILL);
     }
 }
 

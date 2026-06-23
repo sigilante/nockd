@@ -18,6 +18,7 @@ pub struct Paths {
     pub artifacts: PathBuf,
     pub state: PathBuf,
     pub logs: PathBuf,
+    pub run: PathBuf,
 }
 
 impl Paths {
@@ -33,9 +34,10 @@ impl Paths {
             artifacts: root.join("artifacts"),
             state: root.join("state"),
             logs: root.join("logs"),
+            run: root.join("run"),
             root,
         };
-        for dir in [&paths.root, &paths.artifacts, &paths.state, &paths.logs] {
+        for dir in [&paths.root, &paths.artifacts, &paths.state, &paths.logs, &paths.run] {
             std::fs::create_dir_all(dir)
                 .with_context(|| format!("creating {}", dir.display()))?;
         }
@@ -48,6 +50,11 @@ impl Paths {
 
     pub fn log_file(&self, app: &str) -> PathBuf {
         self.logs.join(format!("{app}.log"))
+    }
+
+    /// Pidfile recording a supervised process's pid, for re-adoption across daemon restarts.
+    pub fn pid_file(&self, app: &str) -> PathBuf {
+        self.run.join(format!("{app}.pid"))
     }
 }
 
