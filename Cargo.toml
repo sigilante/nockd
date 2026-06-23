@@ -1,0 +1,31 @@
+[package]
+name = "nockd"
+version = "0.0.1"
+edition = "2021"
+description = "A self-hostable deployment platform for NockApps"
+license = "MIT"
+repository = "https://github.com/sigilante/nockd"
+
+[[bin]]
+name = "nockd"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+axum = "0.7"
+clap = { version = "4", features = ["derive", "env"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.31", features = ["bundled"] }
+blake3 = "1"
+base64 = "0.22"
+toml = "0.8"
+anyhow = "1"
+thiserror = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
+dirs = "5"
+
+[profile.release]
+strip = true
