@@ -54,6 +54,13 @@ pub enum Commands {
         /// App's private/admin gRPC address for the health gate (host:port).
         #[arg(long)]
         health_addr: Option<String>,
+        /// Shell command whose first stdout line becomes the app's custom status (e.g.
+        /// block height). Runs every 5s with cwd=state dir and NOCKD_LOG/NOCKD_ENDPOINT set.
+        #[arg(long)]
+        status_cmd: Option<String>,
+        /// Short label for the custom status (e.g. "BLOCK").
+        #[arg(long)]
+        status_label: Option<String>,
         /// Restart policy: always | on-failure | never.
         #[arg(long, default_value = "on-failure")]
         restart: String,

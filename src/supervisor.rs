@@ -40,6 +40,8 @@ struct Managed {
     backoff_until: i64,
     state: RunState,
     health: HealthState,
+    /// Latest custom status line from the app's configured status command (e.g. block height).
+    status_line: Option<String>,
     /// When set, we have sent SIGTERM and are awaiting graceful exit; past the deadline we
     /// escalate to SIGKILL. Distinguishes intentional termination from a crash in the reap.
     term_deadline: Option<i64>,
@@ -58,6 +60,7 @@ impl Default for Managed {
             backoff_until: 0,
             state: RunState::Stopped,
             health: HealthState::Unknown,
+            status_line: None,
             term_deadline: None,
             restart_requested: false,
         }
@@ -71,6 +74,7 @@ pub struct RuntimeStatus {
     pub started_at: i64,
     pub restarts: u32,
     pub health: HealthState,
+    pub status_line: Option<String>,
 }
 
 pub struct Supervisor {
@@ -100,6 +104,7 @@ impl Supervisor {
             started_at: m.started_at,
             restarts: m.restarts,
             health: m.health,
+            status_line: m.status_line.clone(),
         })
     }
 
@@ -109,6 +114,20 @@ impl Supervisor {
         if let Some(m) = procs.get_mut(name) {
             m.health = health;
         }
+    }
+
+    /// Record the latest custom status line (called by the daemon's status-probe loop).
+    pub fn set_status_line(&self, name: &str, line: Option<String>) {
+        let mut procs = self.procs.lock().unwrap();
+        if let Some(m) = procs.get_mut(name) {
+            m.status_line = line;
+        }
+    }
+
+    /// Whether an app is currently running (used to gate the status probe).
+    pub fn is_running(&self, name: &str) -> bool {
+        let procs = self.procs.lock().unwrap();
+        procs.get(name).map(|m| m.state == RunState::Running).unwrap_or(false)
     }
 
     /// Request a graceful restart: SIGTERM now, escalate to SIGKILL after the grace period,
@@ -152,6 +171,7 @@ impl Supervisor {
                             m.term_deadline = None;
                             m.state = RunState::Stopped;
                             m.health = HealthState::Unknown;
+                            m.status_line = None;
                             let _ = registry.add_event(name, "stop", "stopped");
                         } else {
                             m.restarts += 1;
@@ -206,6 +226,7 @@ impl Supervisor {
                     entry.state = RunState::Stopped;
                     entry.term_deadline = None;
                     entry.health = HealthState::Unknown;
+                    entry.status_line = None;
                 }
                 continue;
             }

@@ -144,7 +144,7 @@ fn ui(f: &mut Frame, state: &State) {
     );
 
     // Fleet table.
-    let header = Row::new(["app", "state", "health", "pid", "restarts", "endpoint"])
+    let header = Row::new(["app", "state", "health", "pid", "restarts", "endpoint", "metric"])
         .style(Style::new().fg(Color::DarkGray).bold());
     let rows = state.apps.iter().enumerate().map(|(i, a)| {
         let (st, health, pid, restarts) = match &a.runtime {
@@ -161,6 +161,15 @@ fn ui(f: &mut Frame, state: &State) {
             "crashed" | "backoff" => Color::Red,
             _ => Color::Gray,
         };
+        let metric = a
+            .runtime
+            .as_ref()
+            .and_then(|rt| rt.status_line.clone())
+            .map(|line| {
+                let label = a.status_label.as_deref().unwrap_or("").trim();
+                if label.is_empty() { line } else { format!("{label} {line}") }
+            })
+            .unwrap_or_else(|| "—".into());
         let cells = vec![
             Cell::from(a.name.clone()),
             Cell::from(st).style(Style::new().fg(state_color)),
@@ -168,6 +177,7 @@ fn ui(f: &mut Frame, state: &State) {
             Cell::from(pid),
             Cell::from(restarts),
             Cell::from(a.endpoint.clone().unwrap_or_else(|| "—".into())),
+            Cell::from(metric),
         ];
         let row = Row::new(cells);
         if i == state.selected {
@@ -182,7 +192,8 @@ fn ui(f: &mut Frame, state: &State) {
         Constraint::Length(12),
         Constraint::Length(8),
         Constraint::Length(9),
-        Constraint::Min(20),
+        Constraint::Length(18),
+        Constraint::Min(16),
     ];
     f.render_widget(
         Table::new(rows, widths)

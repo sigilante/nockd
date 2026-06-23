@@ -34,6 +34,11 @@ pub struct DeployRequest {
     /// App's private/admin gRPC address for health probing (DESIGN §5.3).
     #[serde(default)]
     pub admin_addr: Option<String>,
+    /// Optional custom status command + label (e.g. block height).
+    #[serde(default)]
+    pub status_cmd: Option<String>,
+    #[serde(default)]
+    pub status_label: Option<String>,
     #[serde(default)]
     pub provenance: Option<String>,
 }
@@ -57,6 +62,7 @@ pub struct AppStatus {
     pub kernel_hash: String,
     pub endpoint: Option<String>,
     pub restart_policy: String,
+    pub status_label: Option<String>,
     pub runtime: Option<RuntimeStatus>,
 }
 
@@ -103,6 +109,7 @@ async fn list_apps(State(d): State<Arc<Daemon>>) -> Result<Json<Vec<AppStatus>>,
                 kernel_hash: a.kernel_hash,
                 endpoint: a.endpoint,
                 restart_policy: a.restart_policy,
+                status_label: a.status_label,
             }
         })
         .collect();
@@ -132,6 +139,8 @@ async fn deploy(
         &req.args,
         &state_path.to_string_lossy(),
         req.admin_addr.as_deref(),
+        req.status_cmd.as_deref(),
+        req.status_label.as_deref(),
     )?;
     d.registry.add_event(
         &req.name,

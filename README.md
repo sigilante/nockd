@@ -42,11 +42,17 @@ nockd deploy --project ./myapp --restart always --health-addr 127.0.0.1:5599
 # …or ship a prebuilt artifact (template app: binary + out.jam):
 nockd deploy myapp --bin ./target/release/myapp --jam ./out.jam --restart always
 
-# …or a binary-only app that embeds its kernel — e.g. a nockchain OBSERVER:
+# …or a binary-only app that embeds its kernel — e.g. a nockchain OBSERVER,
+# with a custom status that surfaces block height at a glance:
 nockd deploy nockchain --bin /path/to/nockchain --restart always \
-  --health-addr 127.0.0.1:5555 -- --bind-private-grpc-addr 127.0.0.1:5555
+  --health-addr 127.0.0.1:5555 \
+  --status-label BLOCK \
+  --status-cmd 'grep -oE "height [0-9]+" "$NOCKD_LOG" | tail -1 | grep -oE "[0-9]+"' \
+  -- --bind-private-grpc-addr 127.0.0.1:5555
 #   (no --jam; observer = no --mine; dials default peers to sync; the node's
-#    cwd-relative ./.data.nockchain state lands inside nockd's per-app state dir)
+#    cwd-relative ./.data.nockchain state lands inside nockd's per-app state dir.
+#    --status-cmd runs every 5s with cwd=state dir and NOCKD_LOG/NOCKD_ENDPOINT set;
+#    its first stdout line shows up in ps, the TUI, and the dashboard tile band.)
 
 nockd ps                                       # fleet + state + health
 nockd dash                                     # live TUI (↑/↓ select · r/s/x · q quit)

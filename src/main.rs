@@ -50,6 +50,8 @@ async fn main() -> Result<()> {
             jam,
             endpoint,
             health_addr,
+            status_cmd,
+            status_label,
             restart,
             target,
             args,
@@ -85,6 +87,8 @@ async fn main() -> Result<()> {
                 restart,
                 args,
                 admin_addr: health_addr,
+                status_cmd,
+                status_label,
                 provenance,
             };
             let client = Client::new(&cli.host, cli.port);
@@ -103,8 +107,8 @@ async fn main() -> Result<()> {
                 return Ok(());
             }
             println!(
-                "{:<16} {:<10} {:<12} {:<14} {:<8} {}",
-                "NAME", "STATE", "HEALTH", "KERNEL", "PID", "ENDPOINT"
+                "{:<16} {:<10} {:<12} {:<14} {:<8} {:<20} {}",
+                "NAME", "STATE", "HEALTH", "KERNEL", "PID", "ENDPOINT", "STATUS"
             );
             for a in apps {
                 let (state, health, pid) = match &a.runtime {
@@ -116,14 +120,24 @@ async fn main() -> Result<()> {
                     None => (a.desired_status.clone(), "unknown".into(), "—".into()),
                 };
                 let kernel = a.kernel_hash.chars().take(12).collect::<String>();
+                let status_line = a
+                    .runtime
+                    .as_ref()
+                    .and_then(|rt| rt.status_line.clone())
+                    .map(|line| {
+                        let label = a.status_label.as_deref().unwrap_or("").trim();
+                        if label.is_empty() { line } else { format!("{label} {line}") }
+                    })
+                    .unwrap_or_default();
                 println!(
-                    "{:<16} {:<10} {:<12} {:<14} {:<8} {}",
+                    "{:<16} {:<10} {:<12} {:<14} {:<8} {:<20} {}",
                     a.name,
                     state,
                     health,
                     kernel,
                     pid,
-                    a.endpoint.unwrap_or_else(|| "—".into())
+                    a.endpoint.unwrap_or_else(|| "—".into()),
+                    status_line,
                 );
             }
         }

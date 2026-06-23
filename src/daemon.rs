@@ -42,6 +42,45 @@ impl Daemon {
     }
 }
 
+/// Run an app's status command (`sh -c`) with cwd=state dir and helpful env vars, returning
+/// its first stdout line (trimmed, capped). Times out so a hung command can't stall the loop.
+async fn run_status_cmd(
+    daemon: &Daemon,
+    app: &crate::registry::AppRow,
+    cmd: &str,
+) -> Option<String> {
+    use tokio::process::Command;
+    let state_dir = daemon.paths.state_dir(&app.name);
+    let log = daemon.paths.log_file(&app.name);
+    let mut command = Command::new("sh");
+    command
+        .arg("-c")
+        .arg(cmd)
+        .current_dir(&state_dir)
+        .env("NOCKD_APP", &app.name)
+        .env("NOCKD_STATE_DIR", &state_dir)
+        .env("NOCKD_LOG", &log)
+        .kill_on_drop(true);
+    if let Some(ep) = &app.endpoint {
+        command.env("NOCKD_ENDPOINT", ep);
+    }
+    if let Some(addr) = &app.admin_addr {
+        command.env("NOCKD_ADMIN_ADDR", addr);
+    }
+
+    let output = tokio::time::timeout(Duration::from_secs(5), command.output())
+        .await
+        .ok()? // timed out
+        .ok()?; // spawn/io error
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let line = text.lines().find(|l| !l.trim().is_empty())?.trim();
+    let capped: String = line.chars().take(80).collect();
+    (!capped.is_empty()).then_some(capped)
+}
+
 pub async fn serve(daemon: Arc<Daemon>, host: IpAddr, port: u16) -> Result<()> {
     // Background reconcile loop (DESIGN §5.1).
     let bg = daemon.clone();
@@ -69,6 +108,28 @@ pub async fn serve(daemon: Arc<Daemon>, host: IpAddr, port: u16) -> Result<()> {
                     let state = crate::health::probe(&addr).await;
                     hp.supervisor.set_health(&app.name, state);
                 }
+            }
+        }
+    });
+
+    // Background custom-status loop (e.g. block height): run each running app's configured
+    // status command with cwd=state dir and surface the first stdout line.
+    let sp = daemon.clone();
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(Duration::from_secs(5));
+        loop {
+            tick.tick().await;
+            let apps = match sp.registry.list_apps() {
+                Ok(a) => a,
+                Err(_) => continue,
+            };
+            for app in apps {
+                let Some(cmd) = app.status_cmd.clone() else { continue };
+                if !sp.supervisor.is_running(&app.name) {
+                    continue;
+                }
+                let line = run_status_cmd(&sp, &app, &cmd).await;
+                sp.supervisor.set_status_line(&app.name, line);
             }
         }
     });

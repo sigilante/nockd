@@ -11,6 +11,7 @@ const STATUSES = ['running', 'degraded', 'crashing', 'stopped'];
 const statusClass = (s) => (STATUSES.includes(s) ? s : 'stopped');
 const glyph = (s) => `<span class="glyph ${statusClass(s)}"></span>`;
 const shortHash = (h) => (h ? `${h.slice(0, 4)}…${h.slice(-2)}` : '—');
+const metricStr = (a) => (a.status_line ? `${a.status_label ? a.status_label + ' ' : ''}${a.status_line}` : '');
 
 function fmtUptime(s) {
   if (s == null) return '—';
@@ -88,7 +89,7 @@ function fleetView() {
   function fleetTable(apps) {
     const wrap = $(`<table class="table"><thead><tr>
       <th></th><th>App</th><th>Artifact</th><th>Endpoint</th><th>Uptime</th>
-      <th>Rst</th><th>Health</th><th>Status</th></tr></thead><tbody></tbody></table>`);
+      <th>Rst</th><th>Health</th><th>Metric</th><th>Status</th></tr></thead><tbody></tbody></table>`);
     const tb = wrap.querySelector('tbody');
     if (!apps.length) { app.append($(`<div class="empty-tile">No apps deployed. Use <b>nockd deploy</b>.</div>`)); return wrap; }
     for (const a of apps) {
@@ -102,6 +103,7 @@ function fleetView() {
         <td class="mono">${fmtUptime(a.uptime_s)}</td>
         <td class="mono">${rst}</td>
         <td class="mono muted">${esc(a.health)}</td>
+        <td class="mono">${a.status_line ? esc(metricStr(a)) : '—'}</td>
         <td><span class="status-word ${statusClass(a.status)}">${esc(a.status)}</span></td>
       </tr>`);
       tr.onclick = () => location.hash = `#/app/${encodeURIComponent(a.name)}`;
@@ -117,13 +119,13 @@ function fleetView() {
       const t = $(`<div class="tile ${idle ? 'idle' : ''}">
         <div class="band ${statusClass(a.status)}">
           <span class="left">${glyph(a.status)} ${esc(a.status)}</span>
-          <span>${a.status === 'crashing' ? `${a.restart_count} rst` : fmtUptime(a.uptime_s)}</span>
+          <span>${a.status_line ? esc(a.status_line) : (a.status === 'crashing' ? `${a.restart_count} rst` : fmtUptime(a.uptime_s))}</span>
         </div>
         <div class="body">
           <div class="tname">${esc(a.name)}</div>
           <div class="meta">${esc(a.artifact_hash ? a.artifact_hash.slice(0, 18) + '…' : '—')}</div>
           <div class="meta">${esc(a.endpoint_name || 'no endpoint')}</div>
-          <div class="tfoot"><span>${esc(a.health)}</span><span>vfy —</span></div>
+          <div class="tfoot"><span>up ${fmtUptime(a.uptime_s)}</span><span>${esc(a.health)}</span></div>
         </div>
       </div>`);
       t.onclick = () => location.hash = `#/app/${encodeURIComponent(a.name)}`;
@@ -155,7 +157,7 @@ function detailView(name) {
         <a class="back" href="#/">‹ FLEET</a>
         ${glyph(a.status)}
         <h1>${esc(a.name)}</h1>
-        <span class="sub">${esc(a.restart_policy)} · up ${fmtUptime(a.uptime_s)} · pid ${a.pid ?? '—'}</span>
+        <span class="sub">${esc(a.restart_policy)} · up ${fmtUptime(a.uptime_s)} · pid ${a.pid ?? '—'}${a.status_line ? ' · ' + esc(metricStr(a)) : ''}</span>
         <div class="actions">
           <button class="btn" data-act="restart">Restart</button>
           <button class="btn" data-act="start">Start</button>

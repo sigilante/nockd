@@ -28,6 +28,10 @@ pub struct AppRow {
     pub desired_status: String, // "running" | "stopped"
     /// App's private/admin gRPC address for health probing (DESIGN §5.3).
     pub admin_addr: Option<String>,
+    /// Optional shell command nockd runs periodically; its first stdout line becomes the
+    /// app's custom status line (e.g. block height for a nockchain observer).
+    pub status_cmd: Option<String>,
+    pub status_label: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -63,6 +67,8 @@ impl Registry {
                 state_path     TEXT NOT NULL,
                 desired_status TEXT NOT NULL,
                 admin_addr     TEXT,
+                status_cmd     TEXT,
+                status_label   TEXT,
                 created_at     INTEGER NOT NULL,
                 updated_at     INTEGER NOT NULL
             );
@@ -76,8 +82,14 @@ impl Registry {
             "#,
         )
         .context("initializing schema")?;
-        // Tolerate older DBs created before admin_addr existed.
-        let _ = conn.execute("ALTER TABLE app ADD COLUMN admin_addr TEXT", []);
+        // Tolerate older DBs created before these columns existed.
+        for ddl in [
+            "ALTER TABLE app ADD COLUMN admin_addr TEXT",
+            "ALTER TABLE app ADD COLUMN status_cmd TEXT",
+            "ALTER TABLE app ADD COLUMN status_label TEXT",
+        ] {
+            let _ = conn.execute(ddl, []);
+        }
         Ok(Registry { conn: Mutex::new(conn) })
     }
 
@@ -108,17 +120,20 @@ impl Registry {
         args: &[String],
         state_path: &str,
         admin_addr: Option<&str>,
+        status_cmd: Option<&str>,
+        status_label: Option<&str>,
     ) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         let now = now_secs();
         let args_json = serde_json::to_string(args)?;
         conn.execute(
-            "INSERT INTO app (name, artifact_hash, endpoint, restart_policy, args, state_path, desired_status, admin_addr, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'running', ?7, ?8, ?8)
+            "INSERT INTO app (name, artifact_hash, endpoint, restart_policy, args, state_path, desired_status, admin_addr, status_cmd, status_label, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'running', ?7, ?8, ?9, ?10, ?10)
              ON CONFLICT(name) DO UPDATE SET
                 artifact_hash=?2, endpoint=?3, restart_policy=?4, args=?5,
-                state_path=?6, desired_status='running', admin_addr=?7, updated_at=?8",
-            rusqlite::params![name, artifact_hash, endpoint, restart_policy, args_json, state_path, admin_addr, now],
+                state_path=?6, desired_status='running', admin_addr=?7,
+                status_cmd=?8, status_label=?9, updated_at=?10",
+            rusqlite::params![name, artifact_hash, endpoint, restart_policy, args_json, state_path, admin_addr, status_cmd, status_label, now],
         )?;
         Ok(())
     }
@@ -136,7 +151,7 @@ impl Registry {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT a.name, a.artifact_hash, ar.kernel_hash, a.endpoint, a.restart_policy,
-                    a.args, a.state_path, a.desired_status, a.created_at, a.updated_at, a.admin_addr
+                    a.args, a.state_path, a.desired_status, a.created_at, a.updated_at, a.admin_addr, a.status_cmd, a.status_label
              FROM app a LEFT JOIN artifact ar ON ar.hash = a.artifact_hash
              WHERE a.name = ?1",
         )?;
@@ -150,7 +165,7 @@ impl Registry {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT a.name, a.artifact_hash, ar.kernel_hash, a.endpoint, a.restart_policy,
-                    a.args, a.state_path, a.desired_status, a.created_at, a.updated_at, a.admin_addr
+                    a.args, a.state_path, a.desired_status, a.created_at, a.updated_at, a.admin_addr, a.status_cmd, a.status_label
              FROM app a LEFT JOIN artifact ar ON ar.hash = a.artifact_hash
              ORDER BY a.name",
         )?;
@@ -175,6 +190,8 @@ impl Registry {
             created_at: row.get(8)?,
             updated_at: row.get(9)?,
             admin_addr: row.get(10)?,
+            status_cmd: row.get(11)?,
+            status_label: row.get(12)?,
         })
     }
 
