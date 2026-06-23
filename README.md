@@ -2,6 +2,8 @@
 
 A self-hostable deployment platform for [NockApps](https://github.com/nockchain/nockchain).
 
+![](./img/hero.jpg)
+
 `nockd` runs the clean, content-addressed artifact that the Nockup toolchain produces — a
 Rust wrapper binary plus a Nock kernel (`out.jam`) — as a supervised, stateful, long-lived
 service that attaches to a Nockchain node over gRPC. It ships as a single static binary
