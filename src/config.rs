@@ -51,6 +51,29 @@ impl Paths {
     }
 }
 
+/// Remove ANSI/VT100 CSI escape sequences (e.g. `\x1b[32m`). Apps like nockchain emit color
+/// even when piped; we strip for the status-command stdin and the TUI log pane.
+pub fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\u{1b}' {
+            if chars.peek() == Some(&'[') {
+                chars.next();
+                while let Some(&n) = chars.peek() {
+                    chars.next();
+                    if n.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
 /// Seconds since the Unix epoch.
 pub fn now_secs() -> i64 {
     SystemTime::now()

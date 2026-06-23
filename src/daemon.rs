@@ -42,16 +42,39 @@ impl Daemon {
     }
 }
 
-/// Run an app's status command (`sh -c`) with cwd=state dir and helpful env vars, returning
-/// its first stdout line (trimmed, capped). Times out so a hung command can't stall the loop.
+/// Read up to the last `max_bytes` of a file as lossy UTF-8 (cheap tail for large logs).
+async fn read_tail(path: &std::path::Path, max_bytes: u64) -> String {
+    use tokio::io::{AsyncReadExt, AsyncSeekExt};
+    let Ok(mut f) = tokio::fs::File::open(path).await else {
+        return String::new();
+    };
+    let len = f.metadata().await.map(|m| m.len()).unwrap_or(0);
+    let start = len.saturating_sub(max_bytes);
+    if start > 0 && f.seek(std::io::SeekFrom::Start(start)).await.is_err() {
+        return String::new();
+    }
+    let mut buf = Vec::new();
+    let _ = f.read_to_end(&mut buf).await;
+    String::from_utf8_lossy(&buf).into_owned()
+}
+
+/// Run an app's status command (`sh -c`) with cwd=state dir and the **ANSI-stripped recent
+/// log piped to stdin**, returning its first stdout line (trimmed, capped). The piped stdin
+/// means a recipe is just a grep — no perl/`$NOCKD_LOG`/ANSI handling needed. Times out so a
+/// hung command can't stall the loop.
 async fn run_status_cmd(
     daemon: &Daemon,
     app: &crate::registry::AppRow,
     cmd: &str,
 ) -> Option<String> {
+    use std::process::Stdio;
+    use tokio::io::AsyncWriteExt;
     use tokio::process::Command;
+
     let state_dir = daemon.paths.state_dir(&app.name);
     let log = daemon.paths.log_file(&app.name);
+    let plain = crate::config::strip_ansi(&read_tail(&log, 256 * 1024).await);
+
     let mut command = Command::new("sh");
     command
         .arg("-c")
@@ -60,6 +83,9 @@ async fn run_status_cmd(
         .env("NOCKD_APP", &app.name)
         .env("NOCKD_STATE_DIR", &state_dir)
         .env("NOCKD_LOG", &log)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
         .kill_on_drop(true);
     if let Some(ep) = &app.endpoint {
         command.env("NOCKD_ENDPOINT", ep);
@@ -68,10 +94,15 @@ async fn run_status_cmd(
         command.env("NOCKD_ADMIN_ADDR", addr);
     }
 
-    let output = tokio::time::timeout(Duration::from_secs(5), command.output())
-        .await
-        .ok()? // timed out
-        .ok()?; // spawn/io error
+    let fut = async {
+        let mut child = command.spawn().ok()?;
+        if let Some(mut stdin) = child.stdin.take() {
+            let _ = stdin.write_all(plain.as_bytes()).await;
+            // Dropping stdin closes the pipe so the command sees EOF.
+        }
+        child.wait_with_output().await.ok()
+    };
+    let output = tokio::time::timeout(Duration::from_secs(5), fut).await.ok()??;
     if !output.status.success() {
         return None;
     }

@@ -26,13 +26,14 @@ const ANSI_FG = {
 // within each run. Plain (non-ANSI) lines still get verb coloring.
 function ansiToHtml(line) {
   line = String(line ?? '');
-  let cur = { color: null, bold: false, dim: false, italic: false };
+  let cur = { color: null, bold: false, dim: false };
   const open = () => {
     const s = [];
     if (cur.color) s.push(`color:${cur.color}`);
     if (cur.bold) s.push('font-weight:700');
     if (cur.dim) s.push('opacity:.65');
-    if (cur.italic) s.push('font-style:italic');
+    // ANSI italic (SGR 3) is intentionally NOT rendered: snake_case identifiers like
+    // `new_heaviest_chain` in italic read as Markdown `_emphasis_`. Keep color/bold/dim.
     return s.length ? `<span style="${s.join(';')}">` : '<span>';
   };
   const re = /\x1b\[([0-9;]*)m/g;
@@ -42,12 +43,10 @@ function ansiToHtml(line) {
     emit(line.slice(last, m.index));
     const codes = m[1] === '' ? [0] : m[1].split(';').map(Number);
     for (const c of codes) {
-      if (c === 0) cur = { color: null, bold: false, dim: false, italic: false };
+      if (c === 0) cur = { color: null, bold: false, dim: false };
       else if (c === 1) cur.bold = true;
       else if (c === 2) cur.dim = true;
-      else if (c === 3) cur.italic = true;
       else if (c === 22) { cur.bold = false; cur.dim = false; }
-      else if (c === 23) cur.italic = false;
       else if (c === 39) cur.color = null;
       else if (ANSI_FG[c]) cur.color = ANSI_FG[c];
     }

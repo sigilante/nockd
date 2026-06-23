@@ -47,16 +47,23 @@ nockd deploy myapp --bin ./target/release/myapp --jam ./out.jam --restart always
 nockd deploy nockchain --bin /path/to/nockchain --restart always \
   --health-addr 127.0.0.1:5555 \
   --status-label BLOCK \
-  --status-cmd 'perl -pe "s/\e\[[0-9;]*[A-Za-z]//g" "$NOCKD_LOG" | grep -oE "block_height=[0-9]+" | tail -1 | grep -oE "[0-9]+"' \
+  --status-cmd 'grep -oE "block_height=[0-9]+" | tail -1 | grep -oE "[0-9]+"' \
   -- --bind-private-grpc-addr 127.0.0.1:5555
 #   (no --jam; observer = no --mine; dials default peers to sync; the node's
 #    cwd-relative ./.data.nockchain state lands inside nockd's per-app state dir.
-#    nockchain emits ANSI color even when piped (--color auto, the default); the
-#      dashboard log panel RENDERS that color (I/W levels, etc.) + highlights NockApp
-#      verbs. The status command strips ANSI before grepping block_height= so the
-#      metric still parses. (Pass `--color never` if you'd rather have plain logs.)
-#    --status-cmd runs every 5s with cwd=state dir and NOCKD_LOG/NOCKD_ENDPOINT set;
-#      its first stdout line shows up in ps, the TUI, and the dashboard tile band.)
+#    nockchain emits ANSI color even when piped; the dashboard log panel RENDERS it
+#      (I/W levels) + highlights NockApp verbs.
+#    --status-cmd runs every 5s with the ANSI-stripped recent log piped to STDIN,
+#      cwd=state dir, and NOCKD_LOG/NOCKD_STATE_DIR/NOCKD_ENDPOINT/NOCKD_ADMIN_ADDR set;
+#      its first stdout line shows in ps, the TUI, and the dashboard tile band. The
+#      recipe is just a grep — nockd handles the log + ANSI for you.)
+
+# The status command is fully general — any app, any shell pipeline. It can scrape the
+# app's log (stdin), read state files (cwd = the app's state dir), or query the app's
+# gRPC/HTTP via the NOCKD_ENDPOINT / NOCKD_ADMIN_ADDR env vars. Examples:
+#   wallet balance : --status-label BAL  --status-cmd 'grep -oE "balance=[0-9]+" | tail -1 | grep -oE "[0-9]+"'
+#   http server    : --status-label REQ  --status-cmd 'curl -s "$NOCKD_ENDPOINT/metrics" | jq -r .requests'
+#   state file     : --status-label SEQ  --status-cmd 'cat ./.data.myapp/height 2>/dev/null'
 
 nockd ps                                       # fleet + state + health
 nockd dash                                     # live TUI (↑/↓ select · r/s/x · q quit)
