@@ -224,17 +224,18 @@ pub async fn serve(daemon: Arc<Daemon>, host: IpAddr, port: u16) -> Result<()> {
         .with_context(|| format!("binding {host}:{port}"))?;
     info!("nockd listening on http://{host}:{port}  (dashboard at /)");
 
-    // Gracefully stop managed apps on SIGINT/SIGTERM so they get a clean shutdown (PMA flush)
-    // instead of being orphaned or hard-killed — this is what keeps state from corrupting.
-    let shutdown = daemon.clone();
-    axum::serve(listener, app)
-        .with_graceful_shutdown(async move {
-            shutdown_signal().await;
+    // Race the server against a shutdown signal. We do NOT use axum's graceful-shutdown
+    // connection draining: long-lived SSE streams (dashboard logs/events) never close, so it
+    // would hang forever. Instead, on signal we stop the apps cleanly (PMA flush), then drop
+    // the server future — which closes the listener and any open SSE connections — and exit.
+    let server = std::future::IntoFuture::into_future(axum::serve(listener, app));
+    tokio::select! {
+        res = server => { res.context("http server")?; }
+        _ = shutdown_signal() => {
             info!("shutdown signal received; stopping managed apps");
-            shutdown.supervisor.stop_all().await;
-        })
-        .await
-        .context("http server")?;
+            daemon.supervisor.stop_all().await;
+        }
+    }
     Ok(())
 }
 
