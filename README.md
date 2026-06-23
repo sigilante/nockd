@@ -22,8 +22,24 @@ nockd rollback myapp     # one-step rollback to the previous artifact
 
 ## Status
 
-Early design. The authoritative design reference is **[DESIGN.md](./DESIGN.md)** — read it
-first; it is the bedrock truth this codebase follows.
+Early. The authoritative design reference is **[DESIGN.md](./DESIGN.md)** — read it first;
+it is the bedrock truth this codebase follows.
+
+The **Phase 0 spine** runs: `nockd serve` supervises content-addressed artifacts with
+crash-restart and a SQLite registry, exposes an HTTP control API + a minimal browser
+dashboard, and `nockd deploy/ps/logs/restart/stop` drive it.
+
+```sh
+cargo build
+nockd serve &                                  # daemon + dashboard on http://127.0.0.1:4490
+nockd deploy myapp --bin ./target/release/myapp --jam ./out.jam --restart always
+nockd ps
+nockd logs myapp
+```
+
+Not yet wired (see DESIGN §12 / open questions): client-side `nockup` build, gRPC health
+gate, molt upgrades, secrets, Unix-socket control transport, auth. Phase 0 deploy takes a
+**prebuilt** binary + kernel.
 
 ## License
 
