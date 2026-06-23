@@ -3,6 +3,7 @@
 
 mod api;
 mod apiv1;
+mod attest;
 mod buildkit;
 mod cli;
 mod client;
@@ -177,6 +178,63 @@ async fn main() -> Result<()> {
         Commands::Up => {
             let (changed, total) = Client::new(&cli.host, cli.port).fleet("up").await?;
             println!("started {changed} of {total} apps");
+        }
+
+        Commands::Key { action } => {
+            let paths = config::Paths::resolve(None)?;
+            let key_path = paths.builder_key();
+            match action {
+                cli::KeyAction::Gen => {
+                    let key = attest::generate_key();
+                    attest::save_key(&key, &key_path)?;
+                    println!("builder key created: {}", key_path.display());
+                    println!("public key (builder identity): {}", attest::pubkey_hex(&key));
+                }
+                cli::KeyAction::Show => {
+                    let key = attest::load_key(&key_path)
+                        .context("no builder key — run `nockd key gen`")?;
+                    println!("{}", attest::pubkey_hex(&key));
+                }
+            }
+        }
+
+        Commands::Attest {
+            artifact,
+            kernel,
+            target,
+            out,
+        } => {
+            let paths = config::Paths::resolve(None)?;
+            let key = attest::load_key(&paths.builder_key())
+                .context("no builder key — run `nockd key gen`")?;
+            let provenance = serde_json::json!({ "note": "provenance is captured at build time" });
+            let att = attest::create(&key, &artifact, &kernel, &target, provenance)?;
+            let json = serde_json::to_string_pretty(&att)?;
+            match out {
+                Some(p) => {
+                    std::fs::write(&p, json)?;
+                    println!("attestation written to {}", p.display());
+                }
+                None => println!("{json}"),
+            }
+        }
+
+        Commands::VerifyAtt { file } => {
+            let text = std::fs::read_to_string(&file)
+                .with_context(|| format!("reading {}", file.display()))?;
+            let att: attest::Attestation = serde_json::from_str(&text).context("parsing attestation")?;
+            match attest::verify_signature(&att) {
+                Ok(builder) => {
+                    println!("✓ signature valid");
+                    println!("  builder:  {builder}");
+                    println!("  artifact: {}", att.payload.artifact_hash);
+                    println!("  kernel:   {}", att.payload.kernel_hash);
+                }
+                Err(e) => {
+                    println!("✗ INVALID: {e}");
+                    std::process::exit(1);
+                }
+            }
         }
 
         Commands::Dash => {

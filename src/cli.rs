@@ -94,6 +94,34 @@ pub enum Commands {
         action: EndpointAction,
     },
 
+    /// Manage the builder signing key (for build attestations).
+    Key {
+        #[command(subcommand)]
+        action: KeyAction,
+    },
+
+    /// Sign a build attestation for an artifact (client/CI side).
+    Attest {
+        /// Artifact (bundle) hash, blake3 hex.
+        #[arg(long)]
+        artifact: String,
+        /// Kernel (out.jam) hash, blake3 hex (empty for binary-only).
+        #[arg(long, default_value = "")]
+        kernel: String,
+        /// Target triple.
+        #[arg(long, default_value = env!("NOCKD_DEFAULT_TARGET"))]
+        target: String,
+        /// Write the attestation JSON here (default: stdout).
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+
+    /// Verify a build attestation's signature.
+    VerifyAtt {
+        /// Path to the attestation JSON.
+        file: PathBuf,
+    },
+
     /// Show an app's recent logs.
     Logs {
         name: String,
@@ -109,6 +137,14 @@ pub enum Commands {
 
     /// Start a stopped app.
     Start { name: String },
+}
+
+#[derive(Subcommand)]
+pub enum KeyAction {
+    /// Generate a builder signing key (fails if one exists).
+    Gen,
+    /// Print the builder public key (the attestation identity).
+    Show,
 }
 
 #[derive(Subcommand)]

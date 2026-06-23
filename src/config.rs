@@ -19,6 +19,7 @@ pub struct Paths {
     pub state: PathBuf,
     pub logs: PathBuf,
     pub run: PathBuf,
+    pub keys: PathBuf,
 }
 
 impl Paths {
@@ -35,6 +36,7 @@ impl Paths {
             state: root.join("state"),
             logs: root.join("logs"),
             run: root.join("run"),
+            keys: root.join("keys"),
             root,
         };
         for dir in [&paths.root, &paths.artifacts, &paths.state, &paths.logs, &paths.run] {
@@ -55,6 +57,11 @@ impl Paths {
     /// Pidfile recording a supervised process's pid, for re-adoption across daemon restarts.
     pub fn pid_file(&self, app: &str) -> PathBuf {
         self.run.join(format!("{app}.pid"))
+    }
+
+    /// The builder signing key (ed25519 seed). Lives where you build (dev/CI), not the daemon.
+    pub fn builder_key(&self) -> PathBuf {
+        self.keys.join("builder.key")
     }
 }
 
