@@ -30,10 +30,10 @@ deployment story: no supervision, no persistence, no remote target, no lifecycle
 secrets, no observability. The one cloud gesture (a Replit template) died on memory
 limits.
 
-The original effort to close this gap (Zorp Nockup) stalled for financial reasons. The
-lesson we take from that is **not** "build a managed PaaS and hope it's funded." It is the
-opposite: build an **open, self-hostable engine** whose value does not depend on any
-company staying solvent, and let hosted convenience be an optional layer on top.
+The original effort to close this gap (Zorp Nockup) stalled for various reasons. The
+lesson we take from that is **not** "build a managed PaaS." It is the
+opposite: build an **open, self-hostable engine**  and let hosted convenience be an
+optional layer on top.
 
 This is feasible *because the NockApp artifact is unusually deployment-friendly* (§3).
 
