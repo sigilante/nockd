@@ -1,5 +1,7 @@
 # nockd
 
+**Status ~2026.6.22:  In active development.**
+
 A self-hostable deployment platform for [NockApps](https://github.com/nockchain/nockchain).
 
 ![](./img/hero.jpg)
