@@ -144,16 +144,15 @@ pub async fn logs_sse(State(d): State<Arc<Daemon>>, Path(name): Path<String>) ->
     let path = d.paths.log_file(&name);
     let stream = async_stream::stream! {
         use tokio::io::{AsyncReadExt, AsyncSeekExt};
-        let mut offset: u64 = 0;
 
-        // Seed with the last ~200 lines, then follow from end of file.
-        if let Ok(text) = tokio::fs::read_to_string(&path).await {
-            let lines: Vec<&str> = text.lines().collect();
-            let start = lines.len().saturating_sub(200);
-            for line in &lines[start..] {
-                yield Ok::<Event, Infallible>(Event::default().data(*line));
-            }
-            offset = text.len() as u64;
+        // Seed with the last ~200 lines from a bounded tail (NOT the whole file — nockchain's
+        // log can be GBs), then follow appends from the current end of file.
+        let mut offset: u64 = crate::config::file_len(&path).await;
+        let seed = crate::config::read_tail(&path, 128 * 1024).await;
+        let lines: Vec<&str> = seed.lines().collect();
+        let start = lines.len().saturating_sub(200);
+        for line in &lines[start..] {
+            yield Ok::<Event, Infallible>(Event::default().data(*line));
         }
 
         let mut tick = tokio::time::interval(Duration::from_millis(700));

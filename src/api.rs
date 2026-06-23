@@ -86,6 +86,8 @@ pub fn router(daemon: Arc<Daemon>) -> Router {
         .route("/api/v1/apps/:name/stop", post(stop))
         .route("/api/v1/apps/:name/start", post(start))
         .route("/api/v1/events", get(apiv1::events_sse)) // SSE (follow)
+        .route("/api/v1/down", post(down))
+        .route("/api/v1/up", post(up))
         .route(
             "/api/v1/endpoints",
             get(apiv1::list_endpoints).post(apiv1::add_endpoint),
@@ -210,10 +212,34 @@ async fn logs(
     Path(name): Path<String>,
     Query(q): Query<LogsQuery>,
 ) -> Result<String, ApiError> {
-    let path = d.paths.log_file(&name);
-    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    // Bounded tail read so a multi-GB nockchain log doesn't get slurped into memory.
+    // Size the window to the requested line count (long nockchain lines → ~1 KB each), capped.
+    let window = (q.lines as u64 * 1024).clamp(256 * 1024, 8 * 1024 * 1024);
+    let text = crate::config::read_tail(&d.paths.log_file(&name), window).await;
     let tail: Vec<&str> = text.lines().rev().take(q.lines).collect();
     Ok(tail.into_iter().rev().collect::<Vec<_>>().join("\n"))
+}
+
+/// Set every app's desired status (used by `nockd down` / `nockd up`), then reconcile.
+async fn fleet_set(d: &Arc<Daemon>, status: &str) -> Result<Json<serde_json::Value>, ApiError> {
+    let apps = d.registry.list_apps()?;
+    let mut changed = 0u32;
+    for a in &apps {
+        if a.desired_status != status {
+            d.registry.set_desired(&a.name, status)?;
+            changed += 1;
+        }
+    }
+    d.reconcile();
+    Ok(Json(serde_json::json!({ "changed": changed, "total": apps.len() })))
+}
+
+async fn down(State(d): State<Arc<Daemon>>) -> Result<Json<serde_json::Value>, ApiError> {
+    fleet_set(&d, "stopped").await
+}
+
+async fn up(State(d): State<Arc<Daemon>>) -> Result<Json<serde_json::Value>, ApiError> {
+    fleet_set(&d, "running").await
 }
 
 async fn events(State(d): State<Arc<Daemon>>) -> Result<Json<Vec<EventRow>>, ApiError> {

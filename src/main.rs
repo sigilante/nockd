@@ -168,6 +168,16 @@ async fn main() -> Result<()> {
             }
         }
 
+        Commands::Down => {
+            let (changed, total) = Client::new(&cli.host, cli.port).fleet("down").await?;
+            println!("stopped {changed} of {total} apps");
+        }
+
+        Commands::Up => {
+            let (changed, total) = Client::new(&cli.host, cli.port).fleet("up").await?;
+            println!("started {changed} of {total} apps");
+        }
+
         Commands::Dash => {
             tui::run(&cli.host, cli.port).await?;
         }

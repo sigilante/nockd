@@ -68,6 +68,8 @@ nockd deploy nockchain --bin /path/to/nockchain --restart always \
 nockd ps                                       # fleet + state + health
 nockd dash                                     # live TUI (↑/↓ select · r/s/x · q quit)
 nockd logs nockchain
+nockd down                                     # stop all apps (keeps them deployed)
+nockd up                                       # start all stopped apps
 ```
 
 ### Declarative deploy (`nockd.toml`)

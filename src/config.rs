@@ -81,6 +81,28 @@ pub fn strip_ansi(s: &str) -> String {
     out
 }
 
+/// Read up to the last `max_bytes` of a file as lossy UTF-8 — a cheap tail so we never load
+/// a multi-GB log (nockchain's grows fast) into memory.
+pub async fn read_tail(path: &std::path::Path, max_bytes: u64) -> String {
+    use tokio::io::{AsyncReadExt, AsyncSeekExt};
+    let Ok(mut f) = tokio::fs::File::open(path).await else {
+        return String::new();
+    };
+    let len = f.metadata().await.map(|m| m.len()).unwrap_or(0);
+    let start = len.saturating_sub(max_bytes);
+    if start > 0 && f.seek(std::io::SeekFrom::Start(start)).await.is_err() {
+        return String::new();
+    }
+    let mut buf = Vec::new();
+    let _ = f.read_to_end(&mut buf).await;
+    String::from_utf8_lossy(&buf).into_owned()
+}
+
+/// Current size of a file in bytes (0 if missing) — used to set the SSE follow offset.
+pub async fn file_len(path: &std::path::Path) -> u64 {
+    tokio::fs::metadata(path).await.map(|m| m.len()).unwrap_or(0)
+}
+
 /// Seconds since the Unix epoch.
 pub fn now_secs() -> i64 {
     SystemTime::now()

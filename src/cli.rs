@@ -78,6 +78,12 @@ pub enum Commands {
     /// List deployed apps and their status.
     Ps,
 
+    /// Stop all apps (keeps them deployed; daemon stays up).
+    Down,
+
+    /// Start all stopped apps.
+    Up,
+
     /// Live TUI dashboard of the fleet.
     #[command(alias = "top")]
     Dash,

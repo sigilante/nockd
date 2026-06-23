@@ -70,6 +70,21 @@ impl Client {
         Ok(())
     }
 
+    /// Set the whole fleet's desired status ("down" → stopped, "up" → running).
+    pub async fn fleet(&self, action: &str) -> Result<(u64, u64)> {
+        let resp = self
+            .http
+            .post(format!("{}/api/v1/{action}", self.base))
+            .send()
+            .await
+            .context("connecting to daemon")?;
+        let v: serde_json::Value = Self::check(resp).await?.json().await?;
+        Ok((
+            v["changed"].as_u64().unwrap_or(0),
+            v["total"].as_u64().unwrap_or(0),
+        ))
+    }
+
     pub async fn endpoints(&self) -> Result<serde_json::Value> {
         let resp = self
             .http
