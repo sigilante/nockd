@@ -102,11 +102,22 @@ async fn run_status_cmd(
         }
         child.wait_with_output().await.ok()
     };
-    let output = tokio::time::timeout(Duration::from_secs(5), fut).await.ok()??;
+    let Some(output) = tokio::time::timeout(Duration::from_secs(5), fut).await.ok().flatten()
+    else {
+        tracing::debug!(app = %app.name, "status cmd timed out or failed to spawn");
+        return None;
+    };
+    let text = String::from_utf8_lossy(&output.stdout);
+    tracing::debug!(
+        app = %app.name,
+        exit = ?output.status.code(),
+        log_bytes = plain.len(),
+        out_bytes = output.stdout.len(),
+        "status cmd ran"
+    );
     if !output.status.success() {
         return None;
     }
-    let text = String::from_utf8_lossy(&output.stdout);
     let line = text.lines().find(|l| !l.trim().is_empty())?.trim();
     let capped: String = line.chars().take(80).collect();
     (!capped.is_empty()).then_some(capped)
@@ -148,6 +159,10 @@ pub async fn serve(daemon: Arc<Daemon>, host: IpAddr, port: u16) -> Result<()> {
     let sp = daemon.clone();
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(Duration::from_secs(5));
+        // Last value we logged per app, so we log the FIRST probe result (even None) and
+        // then only on change — distinguishing "configured but not matching" from "unset".
+        let mut last: std::collections::HashMap<String, Option<String>> =
+            std::collections::HashMap::new();
         loop {
             tick.tick().await;
             let apps = match sp.registry.list_apps() {
@@ -157,9 +172,17 @@ pub async fn serve(daemon: Arc<Daemon>, host: IpAddr, port: u16) -> Result<()> {
             for app in apps {
                 let Some(cmd) = app.status_cmd.clone() else { continue };
                 if !sp.supervisor.is_running(&app.name) {
+                    tracing::debug!(app = %app.name, "status probe skipped (not running)");
                     continue;
                 }
                 let line = run_status_cmd(&sp, &app, &cmd).await;
+                if last.get(&app.name) != Some(&line) {
+                    match &line {
+                        Some(v) => tracing::info!(app = %app.name, metric = %v, "status metric updated"),
+                        None => tracing::info!(app = %app.name, "status command produced NO value — check the recipe matches the log (`nockd logs {} | grep ...`)", app.name),
+                    }
+                    last.insert(app.name.clone(), line.clone());
+                }
                 sp.supervisor.set_status_line(&app.name, line);
             }
         }
