@@ -269,6 +269,61 @@ So an app deployment involves **two gRPC addresses**: the outbound **public** en
 dials (the chain), and its own inbound **private** admin address that `nockd` binds to
 localhost and uses for health and control.
 
+### 5.4 The NockApp state & upgrade model — "molt" (bedrock — verified against `nockchain/nockchain`)
+
+**This resolves the project's hardest open question (OQ1): the kernel-upgrade /
+state-migration contract already exists upstream.** `nockd` does not invent it and must not
+reimplement it — it orchestrates around it. Confirmed by reading
+`crates/nockapp/src/{kernel/form.rs,kernel/boot.rs,nockapp/export.rs}` and the Nockup
+template `wrapper.hoon`.
+
+**State shape.** Every NockApp kernel is wrapped by `wrapper.hoon`'s `++keep` door. Its
+persisted state is the **outer-state** noun `[%0 desk-hash=(unit @uvI) internal=inner]`:
+- the leading tag (`%0`) is a **state-schema version**;
+- `desk-hash` records the **build hash** of the kernel (ties state to a content-addressed
+  artifact — see G5);
+- `internal` is the app's own state.
+
+The state is a **kernel-agnostic noun**: it is not bound to the kernel bytecode that
+produced it.
+
+**The `++load` arm (the migration hook).** The kernel exposes `++load |= old=outer-state`
+at a fixed axis (`LOAD_AXIS = 4`). It switches on the version tag `-.old` and produces the
+new state, delegating app-specific migration to the inner `++load`. To ship a breaking
+state change, a developer adds a new `%1` branch mapping `%0 → %1` (and bumps the tag).
+**This arm is the molt.** Writing it is the developer's responsibility; everything else is
+automatic.
+
+**The runtime already drives molt.** On boot against an existing state dir, NockApp
+recovers state in priority order **PMA → snapshot → checkpoint → event-log replay**
+(PMA is a crash-safe double-slab arena; the event log is SQLite with verified snapshot↔log
+continuity). Critically, a **kernel-hash mismatch is expected, not an error**: the
+persisted state noun is cued into the freshly-built *current* kernel and run through
+`++load`, which migrates it. This identical "load old noun into current kernel" path is
+implemented across PMA, snapshot, and checkpoint restore. Forcing a full event-log replay
+on every upgrade is the cost they explicitly eliminate.
+
+**Portable state = one self-describing file.** `Kernel::export()` yields a `LoadState`
+`{ker_hash, event_num, kernel_state}`, serialized as **`ExportedState`** (magic `EXPJAM`,
+a format version, `ker_hash`, `event_num`, and the jammed state noun). `Kernel::import()`
+is the inverse; a `nockapp-chkjam-to-state-jam` tool exists too. This single file is
+exactly `nockd`'s backup / restore / host-migration primitive (G3).
+
+**Implications for `nockd` (the payoff):**
+
+- **`nockd` performs no migration logic.** Its upgrade job is purely the *operational
+  envelope*: snapshot/export the current state → boot the new artifact against the **same
+  state dir** (the runtime auto-runs `++load`) → health-gate over private gRPC (§5.3) →
+  atomic swap → retain the pre-upgrade export for rollback.
+- **Rollback after a schema-changing upgrade must restore state, not just re-point the
+  artifact.** A `%0 → %1` migration can be **one-way**: an old kernel only knows how to
+  `++load` a `%0`, so feeding it migrated `%1` state will fail or corrupt. Therefore
+  `nockd` always captures an `ExportedState` (or snapshot) *immediately before* an upgrade
+  and treats **that** as the rollback target whenever the state schema changed. (Re-pointing
+  the artifact alone is safe only for same-schema rollbacks — see §8.1/§8.3.)
+- **Verification synergy.** `desk-hash` / `ker_hash` embedded in state lets `nockd` confirm
+  a running app's state was produced by / migrated to the expected artifact hash (G5).
+
 ---
 
 ## 6. Data model (Registry / SQLite)
@@ -415,27 +470,37 @@ decide whether a freshly deployed instance is serving before the old one is reti
 
 ### 8.3 State-preserving upgrade — "molt" (phase 2)
 
-This is the hard one and depends on a kernel-side convention (§13, open question).
+The migration itself is **owned by the kernel + NockApp runtime, not by `nockd`** (§5.4).
+`nockd` only provides the operational envelope:
 
 ```
-1. snapshot current state  (rollback point, retained)
-2. boot new kernel in a staging instance
-3. feed old state through the kernel's migration arm (old-state → new-state)
-4. gate on health of the staged instance
-5. on pass: atomically swap; retain old snapshot for one-step rollback
-6. on fail: discard staged instance; old instance untouched
+1. export current state  → ExportedState (EXPJAM)   [rollback target, retained]
+2. boot new artifact against the SAME state dir
+     → runtime cues old state noun into new kernel, runs ++load (auto-migrate)
+3. gate on health of the staged instance via private gRPC (§5.3)
+4. on pass: atomically swap; retain the pre-upgrade EXPJAM for rollback
+5. on fail: discard staged instance; old instance + state untouched
 ```
 
-The platform defines the contract (a kernel upgrade/`+load`-style arm that maps prior
-state to new state); the templates adopt it. Until that contract exists upstream, `nockd`
-treats every deploy as a fresh-state or same-kernel-state deploy and does not attempt
-migration.
+Because a `++load` migration may be **one-way** (§5.4), rollback policy is schema-aware:
+
+- **Same state schema** (artifact changed, version tag unchanged) → rollback = re-point to
+  `prev_artifact` and reconcile.
+- **Changed state schema** (version tag bumped, e.g. `%0 → %1`) → rollback = **restore the
+  pre-upgrade `ExportedState`** captured in step 1, then re-point the artifact. Re-pointing
+  alone is unsafe here.
+
+`nockd` records, per upgrade, whether the schema tag changed so it can pick the correct
+rollback path automatically.
 
 ### 8.4 Backup / restore / migrate
 
-Because state is a jam, backup is a copy of the state dir to a backup target; restore is
-the reverse; host migration is backup-on-A + restore-on-B + re-point endpoint. The state
-manager schedules these per the manifest's `backup` setting.
+Backup is an **`ExportedState` (EXPJAM)** export (§5.4) — a single self-describing file
+holding `ker_hash`, `event_num`, and the jammed state noun — written to a backup target;
+restore is `import`; host migration is export-on-A + import-on-B + re-point endpoint. The
+state manager schedules these per the manifest's `backup` setting. (A raw copy of the PMA
+state dir also works for same-host snapshots, but the EXPJAM export is the portable,
+version-checked form to standardize on.)
 
 ---
 
@@ -555,9 +620,14 @@ secrets backend (stub with a file ref), heavy tier.
 
 ## 13. Open questions / dependencies
 
-- **OQ1 — Kernel upgrade contract.** Molt (§8.3) needs a kernel-side convention (a
-  `+load`-style arm mapping prior state → new state). This must be designed *with* the
-  NockApp templates upstream. Until it exists, `nockd` cannot do live state migration.
+- **OQ1 — Kernel upgrade contract. RESOLVED (§5.4).** The contract already exists upstream:
+  state is a versioned, kernel-agnostic `outer-state` noun `[%0 desk-hash internal]`; the
+  kernel's `++load` arm (axis 4) migrates across version tags; the runtime auto-runs it on a
+  kernel-hash mismatch across PMA/snapshot/checkpoint restore. `nockd` orchestrates the
+  envelope (export → boot-on-same-state → health-gate → swap), performs no migration logic,
+  and uses `ExportedState` (EXPJAM) for backup/restore. Remaining sub-question: a clean
+  convention for `nockd` to *detect* the schema-tag change pre-upgrade (read it from the
+  source manifest, or peek the built kernel) so it picks the right rollback path (§8.3).
 - **OQ2 — Artifact canonicalization.** Exactly what bytes go into the BLAKE3 hash (jam +
   binary + which provenance fields) must be pinned so two honest builders agree. The Rust
   binary's reproducibility (toolchain pin + `--locked` + vendored deps) needs to be
