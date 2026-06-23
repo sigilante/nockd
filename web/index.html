@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>nockd</title>
+  <!-- TODO: self-host Jost + IBM Plex Mono woff2 for full offline fidelity
+       (design/DESIGN-SYSTEM.md §3). Falling back to geometric/mono system fonts. -->
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="bar">
+    <div class="brand">
+      <span class="brand-square"></span>
+      <span class="wordmark">nockd</span>
+    </div>
+    <nav id="nav">
+      <a href="#/" data-route="fleet">FLEET</a>
+      <a href="#/endpoints" data-route="endpoints">ENDPOINTS</a>
+      <a href="#/secrets" data-route="secrets">SECRETS</a>
+      <a href="#/verify" data-route="verify">VERIFY</a>
+    </nav>
+    <div class="host" id="host">localhost</div>
+  </header>
+
+  <main id="app"><!-- views render here --></main>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

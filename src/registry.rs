@@ -192,17 +192,39 @@ impl Registry {
         let mut stmt = conn.prepare(
             "SELECT id, ts, app_name, kind, detail FROM event ORDER BY id DESC LIMIT ?1",
         )?;
-        let rows = stmt
-            .query_map([limit], |row| {
-                Ok(EventRow {
-                    id: row.get(0)?,
-                    ts: row.get(1)?,
-                    app_name: row.get(2)?,
-                    kind: row.get(3)?,
-                    detail: row.get(4)?,
-                })
-            })?
-            .collect::<rusqlite::Result<Vec<_>>>()?;
-        Ok(rows)
+        let rows = stmt.query_map([limit], Self::map_event_row)?;
+        rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+    }
+
+    /// Events for one app, newest first.
+    pub fn list_app_events(&self, app_name: &str, limit: i64) -> Result<Vec<EventRow>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, ts, app_name, kind, detail FROM event
+             WHERE app_name = ?1 ORDER BY id DESC LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![app_name, limit], Self::map_event_row)?;
+        rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+    }
+
+    /// Events with id greater than `after`, oldest first (for SSE tailing).
+    pub fn events_since(&self, after: i64, limit: i64) -> Result<Vec<EventRow>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, ts, app_name, kind, detail FROM event
+             WHERE id > ?1 ORDER BY id ASC LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![after, limit], Self::map_event_row)?;
+        rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+    }
+
+    fn map_event_row(row: &rusqlite::Row) -> rusqlite::Result<EventRow> {
+        Ok(EventRow {
+            id: row.get(0)?,
+            ts: row.get(1)?,
+            app_name: row.get(2)?,
+            kind: row.get(3)?,
+            detail: row.get(4)?,
+        })
     }
 }

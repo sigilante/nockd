@@ -31,6 +31,9 @@ tonic-health = "0.12"
 ratatui = "0.28"
 crossterm = "0.28"
 libc = "0.2"
+rust-embed = "8"
+async-stream = "0.3"
+futures-core = "0.3"
 
 [profile.release]
 strip = true

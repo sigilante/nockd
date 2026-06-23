@@ -2,6 +2,7 @@
 //! See DESIGN.md for the authoritative architecture.
 
 mod api;
+mod apiv1;
 mod buildkit;
 mod cli;
 mod client;

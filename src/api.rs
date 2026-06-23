@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use axum::extract::{DefaultBodyLimit, Path, Query, State};
 use axum::http::StatusCode;
-use axum::response::{Html, IntoResponse, Response};
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use base64::Engine;
@@ -61,24 +61,32 @@ pub struct AppStatus {
 }
 
 pub fn router(daemon: Arc<Daemon>) -> Router {
+    use crate::apiv1;
     Router::new()
-        .route("/", get(dashboard))
         .route("/api/health", get(|| async { "ok" }))
+        // Legacy surface used by the CLI + TUI.
         .route("/api/apps", get(list_apps).post(deploy))
         .route("/api/apps/:name/restart", post(restart))
         .route("/api/apps/:name/stop", post(stop))
         .route("/api/apps/:name/start", post(start))
         .route("/api/apps/:name/logs", get(logs))
         .route("/api/events", get(events))
+        // Versioned surface for the browser dashboard (design/API-INTEGRATION.md).
+        .route("/api/v1/apps", get(apiv1::list_apps))
+        .route("/api/v1/apps/:name", get(apiv1::get_app))
+        .route("/api/v1/apps/:name/events", get(apiv1::app_events))
+        .route("/api/v1/apps/:name/logs", get(apiv1::logs_sse)) // SSE (follow)
+        .route("/api/v1/apps/:name/restart", post(restart))
+        .route("/api/v1/apps/:name/stop", post(stop))
+        .route("/api/v1/apps/:name/start", post(start))
+        .route("/api/v1/events", get(apiv1::events_sse)) // SSE (follow)
+        // Embedded dashboard assets + SPA fallback (DESIGN §9.2).
+        .fallback(crate::dashboard::static_handler)
         // Artifact uploads (binary + kernel, base64) blow past axum's 2 MB default. Allow
         // large bodies for now; streaming/multipart upload is a later refinement (DESIGN
         // §9 API). 1 GiB is generous for a NockApp binary (e.g. nockchain).
         .layer(DefaultBodyLimit::max(1024 * 1024 * 1024))
         .with_state(daemon)
-}
-
-async fn dashboard() -> Html<&'static str> {
-    Html(crate::dashboard::INDEX_HTML)
 }
 
 async fn list_apps(State(d): State<Arc<Daemon>>) -> Result<Json<Vec<AppStatus>>, ApiError> {
