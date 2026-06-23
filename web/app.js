@@ -7,8 +7,55 @@ let dispose = () => {};
 // ---- helpers ----
 const $ = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-// Strip ANSI/VT100 escape sequences (apps like nockchain emit color codes even when piped).
+// Strip ANSI/VT100 escape sequences (used for status grep parity; logs render color).
 const stripAnsi = (s) => String(s ?? '').replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+
+// Highlight NockApp log verbs on top of whatever ANSI coloring the line carries.
+const colorVerbs = (s) => s.replace(/\b(poke|peek|chain|snap)\b/g, (m) => `<span class="v-${m}">${m}</span>`);
+
+// Log ANSI palette — a small expansion of the Bauhaus set, scoped to the log panel only
+// (readable on the dark ink ground). Standard SGR fg codes → harmonious hues.
+const ANSI_FG = {
+  30: '#6b6557', 31: '#e0654c', 32: '#8fb56a', 33: '#efc02a',
+  34: '#6f8fd0', 35: '#c98fd0', 36: '#6fc6c0', 37: '#f3ede1',
+  90: '#9a937f', 91: '#e0654c', 92: '#a6cf86', 93: '#f5d35e',
+  94: '#8aa6e0', 95: '#d6a6dd', 96: '#8fd6d0', 97: '#ffffff',
+};
+
+// Convert a log line's ANSI SGR sequences into styled spans, applying verb highlighting
+// within each run. Plain (non-ANSI) lines still get verb coloring.
+function ansiToHtml(line) {
+  line = String(line ?? '');
+  let cur = { color: null, bold: false, dim: false, italic: false };
+  const open = () => {
+    const s = [];
+    if (cur.color) s.push(`color:${cur.color}`);
+    if (cur.bold) s.push('font-weight:700');
+    if (cur.dim) s.push('opacity:.65');
+    if (cur.italic) s.push('font-style:italic');
+    return s.length ? `<span style="${s.join(';')}">` : '<span>';
+  };
+  const re = /\x1b\[([0-9;]*)m/g;
+  let html = '', last = 0, m;
+  const emit = (text) => { if (text) html += open() + colorVerbs(esc(text)) + '</span>'; };
+  while ((m = re.exec(line)) !== null) {
+    emit(line.slice(last, m.index));
+    const codes = m[1] === '' ? [0] : m[1].split(';').map(Number);
+    for (const c of codes) {
+      if (c === 0) cur = { color: null, bold: false, dim: false, italic: false };
+      else if (c === 1) cur.bold = true;
+      else if (c === 2) cur.dim = true;
+      else if (c === 3) cur.italic = true;
+      else if (c === 22) { cur.bold = false; cur.dim = false; }
+      else if (c === 23) cur.italic = false;
+      else if (c === 39) cur.color = null;
+      else if (ANSI_FG[c]) cur.color = ANSI_FG[c];
+    }
+    last = re.lastIndex;
+  }
+  emit(line.slice(last));
+  return html;
+}
 const STATUSES = ['running', 'degraded', 'crashing', 'stopped'];
 const statusClass = (s) => (STATUSES.includes(s) ? s : 'stopped');
 const glyph = (s) => `<span class="glyph ${statusClass(s)}"></span>`;
@@ -225,15 +272,11 @@ function detailView(name) {
     es = new EventSource(`/api/v1/apps/${encodeURIComponent(name)}/logs`);
     es.onmessage = (m) => {
       const line = document.createElement('div');
-      line.innerHTML = colorVerbs(esc(stripAnsi(m.data)));
+      line.innerHTML = ansiToHtml(m.data);
       pre.append(line);
       box.scrollTop = box.scrollHeight;
     };
     es.onerror = () => {};
-  }
-
-  function colorVerbs(line) {
-    return line.replace(/\b(poke|peek|chain|snap)\b/g, (m) => `<span class="v-${m}">${m}</span>`);
   }
 
   render();
