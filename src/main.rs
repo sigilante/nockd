@@ -56,24 +56,30 @@ async fn main() -> Result<()> {
             let (name, bin_path, jam_path, provenance) = if let Some(proj) = project {
                 let built = buildkit::build_project(&proj)?;
                 let name = name.unwrap_or(built.name);
-                (name, built.bin, built.jam, Some(built.provenance))
+                (name, built.bin, Some(built.jam), Some(built.provenance))
             } else {
                 let name = name.context("app name required (or pass --project <dir>)")?;
                 let bin = bin.context("--bin required when not using --project")?;
-                let jam = jam.context("--jam required when not using --project")?;
+                // --jam is optional: binary-only artifacts embed their kernel (e.g. nockchain).
                 (name, bin, jam, None)
             };
 
             let bin_bytes = std::fs::read(&bin_path)
                 .with_context(|| format!("reading binary {}", bin_path.display()))?;
-            let jam_bytes = std::fs::read(&jam_path)
-                .with_context(|| format!("reading kernel {}", jam_path.display()))?;
             let engine = base64::engine::general_purpose::STANDARD;
+            let jam_b64 = match &jam_path {
+                Some(p) => {
+                    let bytes =
+                        std::fs::read(p).with_context(|| format!("reading kernel {}", p.display()))?;
+                    Some(engine.encode(&bytes))
+                }
+                None => None,
+            };
             let req = api::DeployRequest {
                 name: name.clone(),
                 target_triple: target,
                 bin_b64: engine.encode(&bin_bytes),
-                jam_b64: engine.encode(&jam_bytes),
+                jam_b64,
                 endpoint,
                 restart,
                 args,

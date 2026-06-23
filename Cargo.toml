@@ -30,6 +30,7 @@ tonic = "0.12"
 tonic-health = "0.12"
 ratatui = "0.28"
 crossterm = "0.28"
+libc = "0.2"
 
 [profile.release]
 strip = true

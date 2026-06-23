@@ -26,6 +26,7 @@ use crate::store::Store;
 #[serde(rename_all = "lowercase")]
 pub enum RunState {
     Running,
+    Stopping,
     Stopped,
     Crashed,
     Backoff,
@@ -39,6 +40,9 @@ struct Managed {
     backoff_until: i64,
     state: RunState,
     health: HealthState,
+    /// When set, we have sent SIGTERM and are awaiting graceful exit; past the deadline we
+    /// escalate to SIGKILL. Distinguishes intentional termination from a crash in the reap.
+    term_deadline: Option<i64>,
     /// Set when an operator asked for a restart, so the reap doesn't treat the resulting
     /// exit as a crash (no backoff, no restart-count bump).
     restart_requested: bool,
@@ -54,6 +58,7 @@ impl Default for Managed {
             backoff_until: 0,
             state: RunState::Stopped,
             health: HealthState::Unknown,
+            term_deadline: None,
             restart_requested: false,
         }
     }
@@ -74,6 +79,10 @@ pub struct Supervisor {
 }
 
 const MAX_BACKOFF_SECS: i64 = 60;
+/// Grace period between SIGTERM and SIGKILL on stop/restart (DESIGN §5.1: let the app reach
+/// a clean snapshot before kill). Stateful nodes recover via replay even on SIGKILL, but a
+/// clean shutdown is preferable.
+const GRACE_SECS: i64 = 10;
 
 impl Supervisor {
     pub fn new(paths: Paths) -> Self {
@@ -102,13 +111,15 @@ impl Supervisor {
         }
     }
 
-    /// Force an immediate restart: kill the child and clear backoff.
+    /// Request a graceful restart: SIGTERM now, escalate to SIGKILL after the grace period,
+    /// then start fresh (no crash penalty).
     pub fn request_restart(&self, name: &str) {
         let mut procs = self.procs.lock().unwrap();
         if let Some(m) = procs.get_mut(name) {
-            if let Some(child) = m.child.as_mut() {
+            if let Some(pid) = m.pid {
                 m.restart_requested = true;
-                let _ = child.start_kill();
+                m.term_deadline = Some(now_secs() + GRACE_SECS);
+                send_term(pid);
             }
             m.backoff_until = 0;
         }
@@ -122,7 +133,7 @@ impl Supervisor {
 
         let mut procs = self.procs.lock().unwrap();
 
-        // Reap exited children and update state for everything we track.
+        // Reap exited children, escalate stalled terminations, and update state.
         for (name, m) in procs.iter_mut() {
             if let Some(child) = m.child.as_mut() {
                 match child.try_wait() {
@@ -133,8 +144,15 @@ impl Supervisor {
                         if m.restart_requested {
                             // Operator-initiated restart: no penalty, restart next tick.
                             m.restart_requested = false;
+                            m.term_deadline = None;
                             m.backoff_until = 0;
                             m.state = RunState::Backoff;
+                        } else if m.term_deadline.is_some() {
+                            // Intentional stop (SIGTERM): clean, no crash/backoff.
+                            m.term_deadline = None;
+                            m.state = RunState::Stopped;
+                            m.health = HealthState::Unknown;
+                            let _ = registry.add_event(name, "stop", "stopped");
                         } else {
                             m.restarts += 1;
                             m.backoff_until = now_secs() + backoff_secs(m.restarts);
@@ -143,7 +161,15 @@ impl Supervisor {
                             let _ = registry.add_event(name, "crash", &format!("exit code {code}"));
                         }
                     }
-                    Ok(None) => {}
+                    Ok(None) => {
+                        // Still alive: if a graceful term has timed out, escalate to SIGKILL.
+                        if let Some(deadline) = m.term_deadline {
+                            if now_secs() >= deadline {
+                                warn!(app = %name, "graceful stop timed out; sending SIGKILL");
+                                let _ = child.start_kill();
+                            }
+                        }
+                    }
                     Err(e) => warn!(app = %name, error = %e, "try_wait failed"),
                 }
             }
@@ -166,21 +192,33 @@ impl Supervisor {
             let entry = procs.entry(app.name.clone()).or_default();
 
             if app.desired_status == "stopped" {
-                if let Some(child) = entry.child.as_mut() {
-                    let _ = child.start_kill();
-                    let _ = registry.add_event(&app.name, "stop", "stopped by request");
+                if entry.child.is_some() {
+                    // Begin a graceful stop once; reap/escalation drives it to completion.
+                    if entry.term_deadline.is_none() {
+                        if let Some(pid) = entry.pid {
+                            send_term(pid);
+                        }
+                        entry.term_deadline = Some(now_secs() + GRACE_SECS);
+                        entry.state = RunState::Stopping;
+                        let _ = registry.add_event(&app.name, "stop", "SIGTERM sent");
+                    }
+                } else {
+                    entry.state = RunState::Stopped;
+                    entry.term_deadline = None;
+                    entry.health = HealthState::Unknown;
                 }
-                entry.child = None;
-                entry.pid = None;
-                entry.state = RunState::Stopped;
-                entry.health = HealthState::Unknown;
                 continue;
             }
 
             // desired running
             let alive = entry.child.is_some();
             if alive {
-                entry.state = RunState::Running;
+                // A pending termination (e.g. a graceful restart) shows as Stopping.
+                entry.state = if entry.term_deadline.is_some() {
+                    RunState::Stopping
+                } else {
+                    RunState::Running
+                };
                 continue;
             }
             if app.restart_policy == "never" && entry.restarts > 0 {
@@ -199,6 +237,8 @@ impl Supervisor {
                     entry.started_at = now_secs();
                     entry.state = RunState::Running;
                     entry.health = HealthState::Unknown;
+                    entry.term_deadline = None;
+                    entry.restart_requested = false;
                     info!(app = %app.name, pid = ?entry.pid, "instance started");
                     let _ = registry.add_event(&app.name, "start", "instance started");
                 }
@@ -238,6 +278,15 @@ impl Supervisor {
             .spawn()
             .with_context(|| format!("spawning {}", bin.display()))?;
         Ok(child)
+    }
+}
+
+/// Send SIGTERM to a process (graceful shutdown request).
+fn send_term(pid: u32) {
+    // Safety: kill(2) with a valid pid + signal; ignores the result (process may already
+    // be gone, which is fine — the reap handles the exit).
+    unsafe {
+        libc::kill(pid as libc::pid_t, libc::SIGTERM);
     }
 }
 

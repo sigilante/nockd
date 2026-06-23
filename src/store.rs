@@ -1,10 +1,12 @@
 //! Content-addressed artifact store (DESIGN §5.1, §3).
 //!
-//! An artifact = the Rust wrapper binary + the `out.jam` kernel. We compute two hashes
-//! (DESIGN OQ2, "strict both"):
-//!   - `kernel_hash`   = BLAKE3(out.jam)             — the reproducible, semantic identity
-//!                                                     (matches the runtime's `ker_hash`).
-//!   - `artifact_hash` = BLAKE3(jam ‖ bin ‖ triple)  — the full shipped bundle identity.
+//! An artifact is the Rust wrapper binary, optionally plus an `out.jam` kernel. Apps built
+//! from a Nockup template read `out.jam` from cwd, so it ships separately; apps that
+//! **embed their kernel** (e.g. `nockchain`, `nockchain-wallet` via `kernels_open_*`) are
+//! binary-only. We compute (DESIGN OQ2, "strict both"):
+//!   - `kernel_hash`   = BLAKE3(out.jam)  — reproducible semantic identity; empty when the
+//!                                          kernel is embedded in the binary.
+//!   - `artifact_hash` = BLAKE3([jam ‖] bin ‖ triple) — the full shipped bundle identity.
 //!
 //! Provenance (build host/time, resolved typhoon graph, attestation) lives in a sidecar
 //! and is intentionally excluded from the hashed bytes.
@@ -47,13 +49,22 @@ impl Store {
         self.bin_path(artifact_hash).exists() && self.jam_path(artifact_hash).exists()
     }
 
-    /// Store an artifact, returning its record. Idempotent: a hash already present is a
-    /// no-op (content-addressed dedup, DESIGN §3).
-    pub fn put(&self, jam: &[u8], bin: &[u8], target_triple: &str) -> Result<ArtifactRecord> {
-        let kernel_hash = blake3::hash(jam).to_hex().to_string();
+    /// Store an artifact, returning its record. `jam` is optional (binary-only artifacts
+    /// embed their kernel). Idempotent: a hash already present is a no-op (dedup, DESIGN §3).
+    pub fn put(
+        &self,
+        jam: Option<&[u8]>,
+        bin: &[u8],
+        target_triple: &str,
+    ) -> Result<ArtifactRecord> {
+        let kernel_hash = jam
+            .map(|j| blake3::hash(j).to_hex().to_string())
+            .unwrap_or_default();
 
         let mut hasher = blake3::Hasher::new();
-        hasher.update(jam);
+        if let Some(j) = jam {
+            hasher.update(j);
+        }
         hasher.update(bin);
         hasher.update(target_triple.as_bytes());
         let artifact_hash = hasher.finalize().to_hex().to_string();
@@ -70,7 +81,9 @@ impl Store {
 
         let adir = self.artifact_dir(&artifact_hash);
         std::fs::create_dir_all(&adir).with_context(|| format!("creating {}", adir.display()))?;
-        std::fs::write(self.jam_path(&artifact_hash), jam).context("writing out.jam")?;
+        if let Some(j) = jam {
+            std::fs::write(self.jam_path(&artifact_hash), j).context("writing out.jam")?;
+        }
 
         let bin_path = self.bin_path(&artifact_hash);
         std::fs::write(&bin_path, bin).context("writing binary")?;
@@ -81,12 +94,16 @@ impl Store {
         Ok(record)
     }
 
-    /// Copy the kernel into an app's state dir as `out.jam` (the wrapper reads it from cwd).
+    /// Copy the kernel into an app's state dir as `out.jam` (template apps read it from
+    /// cwd). A no-op for binary-only artifacts that embed their kernel.
     pub fn stage_jam(&self, artifact_hash: &str, state_dir: &Path) -> Result<()> {
         std::fs::create_dir_all(state_dir)
             .with_context(|| format!("creating state dir {}", state_dir.display()))?;
-        std::fs::copy(self.jam_path(artifact_hash), state_dir.join("out.jam"))
-            .context("staging out.jam into state dir")?;
+        let jam = self.jam_path(artifact_hash);
+        if jam.exists() {
+            std::fs::copy(jam, state_dir.join("out.jam"))
+                .context("staging out.jam into state dir")?;
+        }
         Ok(())
     }
 }

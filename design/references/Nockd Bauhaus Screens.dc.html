@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+</style>
+</helmet>
+
+<div style="min-width:100%; width:max-content; min-height:100vh; box-sizing:border-box; padding:56px; background:#d6d2c8; font-family:'Jost',sans-serif; color:#23201b;">
+
+  <!-- INTRO -->
+  <div style="max-width:1100px; margin-bottom:44px;">
+    <div style="display:flex; align-items:baseline; gap:18px; flex-wrap:wrap;">
+      <h1 style="margin:0; font-size:42px; font-weight:600; letter-spacing:-0.01em;">Bauhaus — screens build-out</h1>
+      <span style="font-family:'IBM Plex Mono',monospace; font-size:13px; letter-spacing:0.04em; color:#6f695d;">ENDPOINTS · SECRETS · VERIFY · DEPLOY</span>
+    </div>
+    <p style="margin:16px 0 0; max-width:760px; font-size:16px; line-height:1.55; color:#4a463d;">The remaining dashboard surfaces from the nav, in the approved baseline — flat Metro tiles, Mondrian blocks, heavy black rules, one status grammar (<strong>●</strong> ok, <strong>▲</strong> warn, <strong>▼</strong> down, <strong>■</strong> idle). Scroll right.</p>
+  </div>
+
+  <div style="display:flex; gap:48px; align-items:flex-start;">
+
+    <!-- ============================================================ -->
+    <!-- ENDPOINTS REGISTRY                                           -->
+    <!-- ============================================================ -->
+    <figure data-screen-label="Endpoints" style="margin:0; flex:none; width:1360px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:12px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; letter-spacing:0.1em; color:#6f695d;">ENDPOINTS · Nockchain RPC registry</span></div>
+      <div style="width:1360px; height:864px; background:#f3efe6; border-radius:2px; box-shadow:0 2px 14px rgba(0,0,0,.18); overflow:hidden; display:flex; flex-direction:column;">
+        <!-- header -->
+        <div style="background:#1a1815; display:flex; align-items:center; justify-content:space-between; padding:20px 34px;">
+          <div style="display:flex; align-items:center; gap:18px;"><span style="width:22px; height:22px; background:#cf3a26; display:block;"></span><span style="font-size:28px; font-weight:700; color:#f3ede1;">nockd</span></div>
+          <div style="display:flex; gap:28px; font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:0.12em; color:#8e887b;"><span>FLEET</span><span style="color:#efc02a;">ENDPOINTS</span><span>SECRETS</span><span>VERIFY</span></div>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8e887b;">localhost:7777</div>
+        </div>
+        <!-- stat blocks -->
+        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:7px; background:#1a1815; padding:7px 0;">
+          <div style="background:#f3efe6; padding:20px 28px;"><div style="font-family:'IBM Plex Mono',monospace; font-size:42px; font-weight:700; line-height:0.9; color:#1a1815;">4</div><div style="font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.14em; color:#6b6557; margin-top:6px;">ENDPOINTS</div></div>
+          <div style="background:#2b4c9b; padding:20px 28px;"><div style="font-family:'IBM Plex Mono',monospace; font-size:42px; font-weight:700; line-height:0.9; color:#f3ede1;">2</div><div style="font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.14em; color:#bcc8e2; margin-top:6px;">REACHABLE</div></div>
+          <div style="background:#efc02a; padding:20px 28px;"><div style="font-family:'IBM Plex Mono',monospace; font-size:42px; font-weight:700; line-height:0.9; color:#1a1815;">1</div><div style="font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.14em; color:#6b5410; margin-top:6px;">HIGH LAG</div></div>
+          <div style="background:#cf3a26; padding:20px 28px;"><div style="font-family:'IBM Plex Mono',monospace; font-size:42px; font-weight:700; line-height:0.9; color:#f3ede1;">1</div><div style="font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.14em; color:#f0c6bd; margin-top:6px;">UNREACHABLE</div></div>
+        </div>
+        <!-- tiles -->
+        <div style="flex:1; background:#1a1815; padding:6px; min-height:0;">
+          <div style="height:100%; display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:6px;">
+            <!-- mainnet-rpc OK -->
+            <div style="background:#f3efe6; display:flex; flex-direction:column;">
+              <div style="height:54px; background:#2b4c9b; display:flex; align-items:center; justify-content:space-between; padding:0 22px;"><span style="display:flex; align-items:center; gap:10px;"><span style="width:16px; height:16px; border-radius:50%; background:#f3ede1; display:block;"></span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:0.1em; color:#dbe3f4;">REACHABLE</span></span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#dbe3f4;">240ms</span></div>
+              <div style="flex:1; padding:20px 24px; display:flex; flex-direction:column;">
+                <div style="display:flex; align-items:baseline; justify-content:space-between;"><span style="font-size:23px; font-weight:700; color:#1a1815;">mainnet-rpc</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.08em; color:#6b6557; border:1.5px solid #1a1815; padding:3px 8px;">REMOTE</span></div>
+                <div style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639; margin-top:10px;">http://1.2.3.4:5555 · public-gRPC</div>
+                <div style="margin-top:16px;"><div style="height:8px; background:#ddd4c0;"><div style="width:24%; height:100%; background:#2b4c9b;"></div></div><div style="display:flex; justify-content:space-between; font-family:'IBM Plex Mono',monospace; font-size:10px; color:#9a937f; margin-top:5px;"><span>LAG 240ms</span><span>WalletGetBalance · TxAccepted</span></div></div>
+                <div style="margin-top:auto;"><div style="font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:0.12em; color:#9a937f; margin-bottom:8px;">ATTACHED · 4 APPS</div><div style="display:flex; gap:6px; flex-wrap:wrap;"><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#1a1815; border:1.5px solid #1a1815; padding:3px 9px;">blackjack</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#1a1815; border:1.5px solid #1a1815; padding:3px 9px;">wallet</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#1a1815; border:1.5px solid #1a1815; padding:3px 9px;">treasury</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#1a1815; border:1.5px solid #1a1815; padding:3px 9px;">name-registry</span></div></div>
+              </div>
+            </div>
+            <!-- archive-rpc OK -->
+            <div style="background:#f3efe6; display:flex; flex-direction:column;">
+              <div style="height:54px; background:#2b4c9b; display:flex; align-items:center; justify-content:space-between; padding:0 22px;"><span style="display:flex; align-items:center; gap:10px;"><span style="width:16px; height:16px; border-radius:50%; background:#f3ede1; display:block;"></span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:0.1em; color:#dbe3f4;">REACHABLE</span></span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#dbe3f4;">410ms</span></div>
+              <div style="flex:1; padding:20px 24px; display:flex; flex-direction:column;">
+                <div style="display:flex; align-items:baseline; justify-content:space-between;"><span style="font-size:23px; font-weight:700; color:#1a1815;">archive-rpc</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.08em; color:#6b6557; border:1.5px solid #1a1815; padding:3px 8px;">REMOTE</span></div>
+                <div style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639; margin-top:10px;">http://9.10.11.12:5555 · v2 blocks</div>
+                <div style="margin-top:16px;"><div style="height:8px; background:#ddd4c0;"><div style="width:41%; height:100%; background:#2b4c9b;"></div></div><div style="display:flex; justify-content:space-between; font-family:'IBM Plex Mono',monospace; font-size:10px; color:#9a937f; margin-top:5px;"><span>LAG 410ms</span><span>NockchainBlockService</span></div></div>
+                <div style="margin-top:auto;"><div style="font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:0.12em; color:#9a937f; margin-bottom:8px;">ATTACHED · 1 APP</div><div style="display:flex; gap:6px; flex-wrap:wrap;"><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#1a1815; border:1.5px solid #1a1815; padding:3px 9px;">proof-relay</span></div></div>
+              </div>
+            </div>
+            <!-- testnet-rpc LAGGING -->
+            <div style="background:#f3efe6; display:flex; flex-direction:column;">
+              <div style="height:54px; background:#efc02a; display:flex; align-items:center; justify-content:space-between; padding:0 22px;"><span style="display:flex; align-items:center; gap:10px;"><span style="width:0; height:0; border-left:9px solid transparent; border-right:9px solid transparent; border-bottom:16px solid #1a1815; display:block;"></span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:0.1em; color:#1a1815;">HIGH LAG</span></span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#5a4a12;">880ms</span></div>
+              <div style="flex:1; padding:20px 24px; display:flex; flex-direction:column;">
+                <div style="display:flex; align-items:baseline; justify-content:space-between;"><span style="font-size:23px; font-weight:700; color:#1a1815;">testnet-rpc</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.08em; color:#6b6557; border:1.5px solid #1a1815; padding:3px 8px;">REMOTE</span></div>
+                <div style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639; margin-top:10px;">http://5.6.7.8:5555 · public-gRPC</div>
+                <div style="margin-top:16px;"><div style="height:8px; background:#ddd4c0;"><div style="width:88%; height:100%; background:#efc02a;"></div></div><div style="display:flex; justify-content:space-between; font-family:'IBM Plex Mono',monospace; font-size:10px; color:#9a937f; margin-top:5px;"><span style="color:#9a7a16;">LAG 880ms · over threshold</span><span>retrying</span></div></div>
+                <div style="margin-top:auto;"><div style="font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:0.12em; color:#9a937f; margin-bottom:8px;">ATTACHED · 2 APPS</div><div style="display:flex; gap:6px; flex-wrap:wrap;"><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#1a1815; border:1.5px solid #1a1815; padding:3px 9px;">oracle-feed</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#1a1815; border:1.5px solid #1a1815; padding:3px 9px;">faucet</span></div></div>
+              </div>
+            </div>
+            <!-- local-node DOWN -->
+            <div style="background:#f3efe6; display:flex; flex-direction:column;">
+              <div style="height:54px; background:#cf3a26; display:flex; align-items:center; justify-content:space-between; padding:0 22px;"><span style="display:flex; align-items:center; gap:10px;"><span style="width:0; height:0; border-left:9px solid transparent; border-right:9px solid transparent; border-top:16px solid #f3ede1; display:block;"></span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:0.1em; color:#f7dcd5;">UNREACHABLE</span></span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#f7dcd5;">timeout</span></div>
+              <div style="flex:1; padding:20px 24px; display:flex; flex-direction:column;">
+                <div style="display:flex; align-items:baseline; justify-content:space-between;"><span style="font-size:23px; font-weight:700; color:#1a1815;">local-node</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.08em; color:#6b6557; border:1.5px solid #1a1815; padding:3px 8px;">LOCAL-SOCKET</span></div>
+                <div style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639; margin-top:10px;">http://127.0.0.1:5555 · colocated</div>
+                <div style="margin-top:16px;"><div style="height:8px; background:#ddd4c0; display:flex; gap:4px; overflow:hidden;"><div style="flex:1; background:repeating-linear-gradient(45deg,#cf3a26,#cf3a26 4px,#ddd4c0 4px,#ddd4c0 8px);"></div></div><div style="display:flex; justify-content:space-between; font-family:'IBM Plex Mono',monospace; font-size:10px; color:#9a937f; margin-top:5px;"><span style="color:#cf3a26;">NO ROUTE · connection refused</span><span>last seen 2d</span></div></div>
+                <div style="margin-top:auto;"><div style="font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:0.12em; color:#9a937f; margin-bottom:8px;">ATTACHED · 0 APPS</div><div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#9a937f;">— no instances attached —</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </figure>
+
+    <!-- ============================================================ -->
+    <!-- SECRETS                                                      -->
+    <!-- ============================================================ -->
+    <figure data-screen-label="Secrets" style="margin:0; flex:none; width:1360px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:12px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; letter-spacing:0.1em; color:#6f695d;">SECRETS · names only, encrypted at rest</span></div>
+      <div style="width:1360px; height:864px; background:#f3efe6; border-radius:2px; box-shadow:0 2px 14px rgba(0,0,0,.18); overflow:hidden; display:flex; flex-direction:column;">
+        <!-- header -->
+        <div style="background:#1a1815; display:flex; align-items:center; justify-content:space-between; padding:20px 34px;">
+          <div style="display:flex; align-items:center; gap:18px;"><span style="width:22px; height:22px; background:#cf3a26; display:block;"></span><span style="font-size:28px; font-weight:700; color:#f3ede1;">nockd</span></div>
+          <div style="display:flex; gap:28px; font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:0.12em; color:#8e887b;"><span>FLEET</span><span>ENDPOINTS</span><span style="color:#efc02a;">SECRETS</span><span>VERIFY</span></div>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8e887b;">localhost:7777</div>
+        </div>
+        <!-- security banner -->
+        <div style="background:#efc02a; display:flex; align-items:center; gap:14px; padding:13px 34px;"><span style="width:16px; height:16px; background:#1a1815; display:block;"></span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:0.06em; color:#1a1815;">ENCRYPTED AT REST · RESOLVED INTO THE PROCESS AT LAUNCH · NEVER WRITTEN TO ARTIFACTS OR LOGS · NEVER SHOWN IN CLEARTEXT</span></div>
+        <!-- stat blocks -->
+        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:7px; background:#1a1815; padding:7px 0;">
+          <div style="background:#f3efe6; padding:18px 28px;"><div style="font-family:'IBM Plex Mono',monospace; font-size:38px; font-weight:700; line-height:0.9; color:#1a1815;">5</div><div style="font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.14em; color:#6b6557; margin-top:6px;">SECRETS</div></div>
+          <div style="background:#2b4c9b; padding:18px 28px;"><div style="font-family:'IBM Plex Mono',monospace; font-size:38px; font-weight:700; line-height:0.9; color:#f3ede1;">5</div><div style="font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.14em; color:#bcc8e2; margin-top:6px;">IN USE</div></div>
+          <div style="background:#efc02a; padding:18px 28px;"><div style="font-family:'IBM Plex Mono',monospace; font-size:38px; font-weight:700; line-height:0.9; color:#1a1815;">2</div><div style="font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.14em; color:#6b5410; margin-top:6px;">ROTATED &lt;30d</div></div>
+          <div style="background:#1a1815; padding:18px 28px;"><div style="font-family:'IBM Plex Mono',monospace; font-size:38px; font-weight:700; line-height:0.9; color:#f3ede1;">1</div><div style="font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.14em; color:#8e887b; margin-top:6px;">STALE</div></div>
+        </div>
+        <!-- table -->
+        <div style="flex:1; padding:22px 34px 0;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.12em; color:#6b6557;">NAMED SECRETS</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.08em; color:#f3efe6; background:#1a1815; padding:8px 16px;">+ SET SECRET</span></div>
+          <div style="display:grid; grid-template-columns:1.4fr 1.1fr 1.1fr 0.8fr 0.9fr 1.1fr 0.8fr; font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.1em; color:#6b6557; padding-bottom:12px; border-bottom:4px solid #1a1815;"><span>NAME</span><span>USED BY</span><span>ENV KEY</span><span>CREATED</span><span>LAST USED</span><span>VALUE</span><span>ACTION</span></div>
+          <div style="display:grid; grid-template-columns:1.4fr 1.1fr 1.1fr 0.8fr 0.9fr 1.1fr 0.8fr; align-items:center; padding:16px 0; border-bottom:2px solid #1a1815;"><span style="font-size:16px; font-weight:600; color:#1a1815;">blackjack-wallet</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639;">blackjack</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#2b4c9b;">WALLET_KEY</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639;">06-04</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639;">2m ago</span><span><span style="background:#1a1815; color:#8e887b; font-family:'IBM Plex Mono',monospace; font-size:13px; letter-spacing:2px; padding:4px 12px;">••••••••</span></span><span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#1a1815; border:1.5px solid #1a1815; padding:5px 12px;">ROTATE</span></span></div>
+          <div style="display:grid; grid-template-columns:1.4fr 1.1fr 1.1fr 0.8fr 0.9fr 1.1fr 0.8fr; align-items:center; padding:16px 0; border-bottom:2px solid #1a1815;"><span style="font-size:16px; font-weight:600; color:#1a1815;">treasury-key</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639;">treasury</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#2b4c9b;">WALLET_KEY</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639;">05-20</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639;">5m ago</span><span><span style="background:#1a1815; color:#8e887b; font-family:'IBM Plex Mono',monospace; font-size:13px; letter-spacing:2px; padding:4px 12px;">••••••••</span></span><span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#1a1815; border:1.5px solid #1a1815; padding:5px 12px;">ROTATE</span></span></div>
+          <div style="display:grid; grid-template-columns:1.4fr 1.1fr 1.1fr 0.8fr 0.9fr 1.1fr 0.8fr; align-items:center; padding:16px 0; border-bottom:2px solid #1a1815;"><span style="font-size:16px; font-weight:600; color:#1a1815;">oracle-signer</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639;">oracle-feed</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#2b4c9b;">SIGNER_KEY</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639;">06-10</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639;">1h ago</span><span><span style="background:#1a1815; color:#8e887b; font-family:'IBM Plex Mono',monospace; font-size:13px; letter-spacing:2px; padding:4px 12px;">••••••••</span></span><span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#1a1815; border:1.5px solid #1a1815; padding:5px 12px;">ROTATE</span></span></div>
+          <div style="display:grid; grid-template-columns:1.4fr 1.1fr 1.1fr 0.8fr 0.9fr 1.1fr 0.8fr; align-items:center; padding:16px 0; border-bottom:2px solid #1a1815;"><span style="font-size:16px; font-weight:600; color:#1a1815;">relay-key</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639;">proof-relay</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#2b4c9b;">WALLET_KEY</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639;">05-02</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#cf3a26;">stale · 41d</span><span><span style="background:#1a1815; color:#8e887b; font-family:'IBM Plex Mono',monospace; font-size:13px; letter-spacing:2px; padding:4px 12px;">••••••••</span></span><span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#cf3a26; border:1.5px solid #cf3a26; padding:5px 12px;">ROTATE</span></span></div>
+          <div style="display:grid; grid-template-columns:1.4fr 1.1fr 1.1fr 0.8fr 0.9fr 1.1fr 0.8fr; align-items:center; padding:16px 0;"><span style="font-size:16px; font-weight:600; color:#1a1815;">faucet-key</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639;">faucet</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#2b4c9b;">WALLET_KEY</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639;">04-15</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639;">3d ago</span><span><span style="background:#1a1815; color:#8e887b; font-family:'IBM Plex Mono',monospace; font-size:13px; letter-spacing:2px; padding:4px 12px;">••••••••</span></span><span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#1a1815; border:1.5px solid #1a1815; padding:5px 12px;">ROTATE</span></span></div>
+        </div>
+      </div>
+    </figure>
+
+    <!-- ============================================================ -->
+    <!-- VERIFICATION                                                 -->
+    <!-- ============================================================ -->
+    <figure data-screen-label="Verification" style="margin:0; flex:none; width:1360px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:12px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; letter-spacing:0.1em; color:#6f695d;">VERIFICATION · reproducible-build check</span></div>
+      <div style="width:1360px; height:864px; background:#f3efe6; border-radius:2px; box-shadow:0 2px 14px rgba(0,0,0,.18); overflow:hidden; display:flex; flex-direction:column;">
+        <!-- header -->
+        <div style="background:#1a1815; display:flex; align-items:center; justify-content:space-between; padding:20px 34px;">
+          <div style="display:flex; align-items:center; gap:18px;"><span style="width:22px; height:22px; background:#cf3a26; display:block;"></span><span style="font-size:28px; font-weight:700; color:#f3ede1;">nockd</span></div>
+          <div style="display:flex; gap:28px; font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:0.12em; color:#8e887b;"><span>FLEET</span><span>ENDPOINTS</span><span>SECRETS</span><span style="color:#efc02a;">VERIFY</span></div>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8e887b;">localhost:7777</div>
+        </div>
+        <!-- stat blocks -->
+        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:7px; background:#1a1815; padding:7px 0;">
+          <div style="background:#f3efe6; padding:18px 28px;"><div style="font-family:'IBM Plex Mono',monospace; font-size:38px; font-weight:700; line-height:0.9; color:#1a1815;">7</div><div style="font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.14em; color:#6b6557; margin-top:6px;">DEPLOYED</div></div>
+          <div style="background:#2b4c9b; padding:18px 28px;"><div style="font-family:'IBM Plex Mono',monospace; font-size:38px; font-weight:700; line-height:0.9; color:#f3ede1;">5</div><div style="font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.14em; color:#bcc8e2; margin-top:6px;">VERIFIED</div></div>
+          <div style="background:#efc02a; padding:18px 28px;"><div style="font-family:'IBM Plex Mono',monospace; font-size:38px; font-weight:700; line-height:0.9; color:#1a1815;">1</div><div style="font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.14em; color:#6b5410; margin-top:6px;">VERIFYING</div></div>
+          <div style="background:#1a1815; padding:18px 28px;"><div style="font-family:'IBM Plex Mono',monospace; font-size:38px; font-weight:700; line-height:0.9; color:#f3ede1;">1</div><div style="font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.14em; color:#8e887b; margin-top:6px;">UNVERIFIED</div></div>
+        </div>
+        <!-- statement strip -->
+        <div style="background:#f3efe6; border-bottom:4px solid #1a1815; padding:14px 34px; display:flex; align-items:center; justify-content:space-between;">
+          <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#4a4639; max-width:760px; line-height:1.5;">Each artifact is rebuilt from pinned source (hoonc + toolchain) and its BLAKE3 compared. Match → <span style="color:#2b4c9b;">VERIFIED</span>. Mismatch → <span style="color:#cf3a26;">DRIFT</span> (tampered or out-of-band change).</span>
+          <div style="display:flex; gap:16px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:#6b6557;"><span style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:50%; background:#2b4c9b;"></span>VERIFIED</span><span style="display:flex; align-items:center; gap:6px;"><span style="width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent; border-bottom:11px solid #efc02a;"></span>VERIFYING</span><span style="display:flex; align-items:center; gap:6px;"><span style="width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent; border-top:11px solid #cf3a26;"></span>DRIFT</span></div>
+        </div>
+        <!-- rows -->
+        <div style="flex:1; padding:8px 34px 0;">
+          <div style="display:grid; grid-template-columns:24px 1.4fr 1.2fr 1.5fr 1.4fr; font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.1em; color:#6b6557; padding:14px 0 12px;"><span></span><span>APP</span><span>ARTIFACT</span><span>TOOLCHAIN</span><span>STATUS</span></div>
+          <div style="display:grid; grid-template-columns:24px 1.4fr 1.2fr 1.5fr 1.4fr; align-items:center; padding:15px 0; border-top:2px solid #1a1815;"><span><span style="width:13px; height:13px; border-radius:50%; background:#2b4c9b; display:block;"></span></span><span style="font-size:16px; font-weight:600; color:#1a1815;">blackjack</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639;">a3f2…9c</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:#4a4639;">hoonc 0.9.2 · rust 1.81</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#2b4c9b;">VERIFIED ✓ · hash match · 14:02</span></div>
+          <div style="display:grid; grid-template-columns:24px 1.4fr 1.2fr 1.5fr 1.4fr; align-items:center; padding:15px 0; border-top:2px solid #1a1815;"><span><span style="width:13px; height:13px; border-radius:50%; background:#2b4c9b; display:block;"></span></span><span style="font-size:16px; font-weight:600; color:#1a1815;">wallet</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639;">c5d9…3b</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:#4a4639;">hoonc 0.9.2 · rust 1.81</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#2b4c9b;">VERIFIED ✓ · hash match · 13:40</span></div>
+          <div style="display:grid; grid-template-columns:24px 1.4fr 1.2fr 1.5fr 1.4fr; align-items:center; padding:15px 0; border-top:2px solid #1a1815;"><span><span style="width:13px; height:13px; border-radius:50%; background:#2b4c9b; display:block;"></span></span><span style="font-size:16px; font-weight:600; color:#1a1815;">treasury</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639;">7c21…04</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:#4a4639;">hoonc 0.9.2 · rust 1.81</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#2b4c9b;">VERIFIED ✓ · hash match · 11:20</span></div>
+          <div style="display:grid; grid-template-columns:24px 1.4fr 1.2fr 1.5fr 1.4fr; align-items:center; padding:15px 0; border-top:2px solid #1a1815;"><span><span style="width:0; height:0; border-left:8px solid transparent; border-right:8px solid transparent; border-bottom:14px solid #efc02a; display:block;"></span></span><span style="font-size:16px; font-weight:600; color:#1a1815;">name-registry</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639;">1b8e…7a</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:#4a4639;">hoonc 0.9.2 · rust 1.81</span><span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#9a7a16;">VERIFYING… rebuilding 64%</span><span style="display:block; height:7px; background:#ddd4c0; margin-top:6px; max-width:200px;"><span style="display:block; width:64%; height:100%; background:#efc02a;"></span></span></span></div>
+          <div style="display:grid; grid-template-columns:24px 1.4fr 1.2fr 1.5fr 1.4fr; align-items:center; padding:15px 0; border-top:2px solid #1a1815;"><span><span style="width:13px; height:13px; border-radius:50%; background:#2b4c9b; display:block;"></span></span><span style="font-size:16px; font-weight:600; color:#1a1815;">oracle-feed</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639;">e914…b2</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:#4a4639;">hoonc 0.9.1 · rust 1.81</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#2b4c9b;">VERIFIED ✓ · hash match · 09:14</span></div>
+          <div style="display:grid; grid-template-columns:24px 1.4fr 1.2fr 1.5fr 1.4fr; align-items:center; padding:15px 0; border-top:2px solid #1a1815;"><span><span style="width:13px; height:13px; border-radius:50%; background:#2b4c9b; display:block;"></span></span><span style="font-size:16px; font-weight:600; color:#1a1815;">proof-relay</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#4a4639;">9aa0…1f</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:#4a4639;">hoonc 0.9.2 · rust 1.81</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#2b4c9b;">VERIFIED ✓ · hash match · 08:50</span></div>
+          <div style="display:grid; grid-template-columns:24px 1.4fr 1.2fr 1.5fr 1.4fr; align-items:center; padding:15px 0; border-top:2px solid #1a1815; border-bottom:2px solid #1a1815;"><span><span style="width:13px; height:13px; background:#8e887b; display:block;"></span></span><span style="font-size:16px; font-weight:600; color:#7c7665;">faucet</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#9a937f;">44d7…e0</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:#9a937f;">no source pin</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#7c7665;">UNVERIFIED · cannot rebuild</span></div>
+        </div>
+      </div>
+    </figure>
+
+    <!-- ============================================================ -->
+    <!-- DEPLOY FLOW (health-gated)                                   -->
+    <!-- ============================================================ -->
+    <figure data-screen-label="Deploy" style="margin:0; flex:none; width:1360px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:12px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; letter-spacing:0.1em; color:#6f695d;">DEPLOY · health-gated rollout</span></div>
+      <div style="width:1360px; height:864px; background:#f3efe6; border-radius:2px; box-shadow:0 2px 14px rgba(0,0,0,.18); overflow:hidden; position:relative;">
+        <!-- ghost fleet backdrop -->
+        <div style="position:absolute; inset:0; opacity:0.45; display:flex; flex-direction:column;">
+          <div style="background:#1a1815; display:flex; align-items:center; justify-content:space-between; padding:20px 34px;"><div style="display:flex; align-items:center; gap:18px;"><span style="width:22px; height:22px; background:#cf3a26; display:block;"></span><span style="font-size:28px; font-weight:700; color:#f3ede1;">nockd</span></div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:0.12em; color:#8e887b;">FLEET</div></div>
+          <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:7px; background:#1a1815; padding:7px 0;"><div style="background:#f3efe6; padding:18px 28px;"><div style="font-family:'IBM Plex Mono',monospace; font-size:36px; font-weight:700; color:#1a1815;">7</div></div><div style="background:#2b4c9b; padding:18px 28px;"><div style="font-family:'IBM Plex Mono',monospace; font-size:36px; font-weight:700; color:#f3ede1;">4</div></div><div style="background:#efc02a; padding:18px 28px;"><div style="font-family:'IBM Plex Mono',monospace; font-size:36px; font-weight:700; color:#1a1815;">1</div></div><div style="background:#cf3a26; padding:18px 28px;"><div style="font-family:'IBM Plex Mono',monospace; font-size:36px; font-weight:700; color:#f3ede1;">1</div></div></div>
+          <div style="padding:24px 34px; display:flex; flex-direction:column; gap:28px;"><div style="height:18px; background:#ddd4c0; width:80%;"></div><div style="height:18px; background:#ddd4c0; width:72%;"></div><div style="height:18px; background:#ddd4c0; width:78%;"></div><div style="height:18px; background:#ddd4c0; width:65%;"></div></div>
+        </div>
+        <!-- scrim -->
+        <div style="position:absolute; inset:0; background:rgba(26,24,21,0.62);"></div>
+        <!-- modal -->
+        <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:40px;">
+          <div style="width:820px; background:#f3efe6; box-shadow:0 18px 50px rgba(0,0,0,.4);">
+            <!-- title -->
+            <div style="background:#1a1815; display:flex; align-items:center; justify-content:space-between; padding:18px 26px;"><span style="font-family:'Jost',sans-serif; font-size:18px; font-weight:600; letter-spacing:0.04em; color:#f3ede1;">DEPLOY · blackjack</span><span style="font-family:'IBM Plex Mono',monospace; font-size:16px; color:#8e887b;">✕</span></div>
+            <!-- artifact swap -->
+            <div style="display:flex; align-items:stretch; border-bottom:4px solid #1a1815;">
+              <div style="flex:1; padding:16px 26px;"><div style="font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:0.12em; color:#9a937f;">CURRENT</div><div style="font-family:'IBM Plex Mono',monospace; font-size:15px; color:#4a4639; margin-top:4px;">blake3:a3f2…9c</div></div>
+              <div style="display:flex; align-items:center; padding:0 8px; font-family:'IBM Plex Mono',monospace; font-size:22px; color:#1a1815;">→</div>
+              <div style="flex:1; padding:16px 26px; background:#2b4c9b;"><div style="font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:0.12em; color:#bcc8e2;">NEW</div><div style="font-family:'IBM Plex Mono',monospace; font-size:15px; color:#f3ede1; margin-top:4px;">blake3:b7e4…2a</div></div>
+            </div>
+            <!-- pipeline -->
+            <div style="padding:22px 26px; display:flex; flex-direction:column; gap:10px;">
+              <div style="display:flex; align-items:center; gap:16px;"><span style="width:34px; height:34px; background:#2b4c9b; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:15px; font-weight:700; color:#f3ede1; flex:none;">1</span><span style="width:120px; flex:none; font-family:'Jost',sans-serif; font-size:15px; font-weight:600; color:#1a1815;">BUILD</span><span style="flex:1; font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:#6b6557;">hoonc + cargo · 3.1s</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#2b4c9b;">DONE ✓</span></div>
+              <div style="display:flex; align-items:center; gap:16px;"><span style="width:34px; height:34px; background:#2b4c9b; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:15px; font-weight:700; color:#f3ede1; flex:none;">2</span><span style="width:120px; flex:none; font-family:'Jost',sans-serif; font-size:15px; font-weight:600; color:#1a1815;">HASH</span><span style="flex:1; font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:#6b6557;">blake3:b7e4…2a · content-addressed</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#2b4c9b;">DONE ✓</span></div>
+              <div style="display:flex; align-items:center; gap:16px;"><span style="width:34px; height:34px; background:#2b4c9b; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:15px; font-weight:700; color:#f3ede1; flex:none;">3</span><span style="width:120px; flex:none; font-family:'Jost',sans-serif; font-size:15px; font-weight:600; color:#1a1815;">UPLOAD</span><span style="flex:1; font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:#6b6557;">dedup · 1 new layer shipped</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#2b4c9b;">DONE ✓</span></div>
+              <div style="display:flex; align-items:center; gap:16px;"><span style="width:34px; height:34px; background:#2b4c9b; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:15px; font-weight:700; color:#f3ede1; flex:none;">4</span><span style="width:120px; flex:none; font-family:'Jost',sans-serif; font-size:15px; font-weight:600; color:#1a1815;">START</span><span style="flex:1; font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:#6b6557;">new instance · against existing state dir</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#2b4c9b;">DONE ✓</span></div>
+              <!-- active health gate -->
+              <div style="display:flex; align-items:flex-start; gap:16px; background:#efc02a; padding:14px 14px; margin:4px -2px;"><span style="width:34px; height:34px; background:#1a1815; display:flex; align-items:center; justify-content:center; flex:none;"><span style="width:0; height:0; border-left:8px solid transparent; border-right:8px solid transparent; border-bottom:14px solid #efc02a; display:block;"></span></span><span style="width:120px; flex:none; font-family:'Jost',sans-serif; font-size:15px; font-weight:700; color:#1a1815;">HEALTH GATE</span><div style="flex:1;"><div style="font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:#5a4a12;">probing private-gRPC · Ping ok · gRPC health SERVING · poke %ping…</div><div style="height:7px; background:#caa01e; margin-top:8px;"><div style="width:72%; height:100%; background:#1a1815;"></div></div></div><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; color:#1a1815;">GATING…</span></div>
+              <div style="display:flex; align-items:center; gap:16px;"><span style="width:34px; height:34px; background:#ddd4c0; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:15px; font-weight:700; color:#9a937f; flex:none;">6</span><span style="width:120px; flex:none; font-family:'Jost',sans-serif; font-size:15px; font-weight:600; color:#9a937f;">RETIRE OLD</span><span style="flex:1; font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:#9a937f;">old instance still serving until gate passes</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#9a937f;">PENDING</span></div>
+            </div>
+            <!-- note + actions -->
+            <div style="padding:0 26px 12px;"><div style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:#6b6557; line-height:1.5; border-left:4px solid #1a1815; padding-left:12px;">The previous instance keeps serving until the new one proves healthy — a bad deploy never mutates state and rolls back in one click.</div></div>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 26px; border-top:4px solid #1a1815;">
+              <span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#6b6557;">↩ ROLLBACK to a3f2…9c available</span>
+              <div style="display:flex; gap:3px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:0.06em; color:#1a1815; border:2px solid #1a1815; padding:9px 18px;">CANCEL</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:0.06em; color:#f3ede1; background:#1a1815; padding:11px 20px;">DEPLOYING…</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </figure>
+
+    <!-- INSERT-HERE -->
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

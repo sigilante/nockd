@@ -22,7 +22,9 @@ pub struct DeployRequest {
     pub name: String,
     pub target_triple: String,
     pub bin_b64: String,
-    pub jam_b64: String,
+    /// Base64 kernel. Absent for binary-only artifacts that embed their kernel.
+    #[serde(default)]
+    pub jam_b64: Option<String>,
     #[serde(default)]
     pub endpoint: Option<String>,
     #[serde(default = "default_restart")]
@@ -101,9 +103,12 @@ async fn deploy(
 ) -> Result<Json<DeployResponse>, ApiError> {
     let engine = base64::engine::general_purpose::STANDARD;
     let bin = engine.decode(&req.bin_b64).map_err(|e| anyhow::anyhow!("bad bin_b64: {e}"))?;
-    let jam = engine.decode(&req.jam_b64).map_err(|e| anyhow::anyhow!("bad jam_b64: {e}"))?;
+    let jam = match &req.jam_b64 {
+        Some(j) => Some(engine.decode(j).map_err(|e| anyhow::anyhow!("bad jam_b64: {e}"))?),
+        None => None,
+    };
 
-    let rec = d.store.put(&jam, &bin, &req.target_triple)?;
+    let rec = d.store.put(jam.as_deref(), &bin, &req.target_triple)?;
     d.registry.put_artifact(&rec, req.provenance.as_deref())?;
 
     let state_path = d.paths.state_dir(&req.name);

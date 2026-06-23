@@ -39,13 +39,22 @@ nockd serve &                                  # daemon on http://127.0.0.1:4490
 # Build with the client-side toolchain (the daemon never compiles):
 nockd deploy --project ./myapp --restart always --health-addr 127.0.0.1:5599
 
-# …or ship a prebuilt artifact:
+# …or ship a prebuilt artifact (template app: binary + out.jam):
 nockd deploy myapp --bin ./target/release/myapp --jam ./out.jam --restart always
+
+# …or a binary-only app that embeds its kernel — e.g. a nockchain OBSERVER:
+nockd deploy nockchain --bin /path/to/nockchain --restart always \
+  --health-addr 127.0.0.1:5555 -- --bind-private-grpc-addr 127.0.0.1:5555
+#   (no --jam; observer = no --mine; dials default peers to sync; the node's
+#    cwd-relative ./.data.nockchain state lands inside nockd's per-app state dir)
 
 nockd ps                                       # fleet + state + health
 nockd dash                                     # live TUI (↑/↓ select · r/s/x · q quit)
-nockd logs myapp
+nockd logs nockchain
 ```
+
+`nockchain-wallet` is **not** a fit: it's a one-shot command tool (pokes once, exits), not
+a long-lived service to supervise.
 
 - **Build/run split (principle 7):** `--project` shells out to `nockup`; the daemon only
   runs artifacts and needs no toolchain.
