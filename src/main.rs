@@ -45,6 +45,7 @@ async fn main() -> Result<()> {
 
         Commands::Deploy {
             name,
+            manifest,
             project,
             bin,
             jam,
@@ -56,6 +57,31 @@ async fn main() -> Result<()> {
             target,
             args,
         } => {
+            // A manifest supplies all config; otherwise use the flags.
+            let (name, project, bin, jam, endpoint, health_addr, status_cmd, status_label, restart, target, args) =
+                if let Some(mpath) = manifest {
+                    let d = config::DeployManifest::load(&mpath)?.deploy;
+                    (
+                        Some(d.app),
+                        d.project,
+                        d.bin,
+                        d.jam,
+                        d.endpoint,
+                        d.health_addr,
+                        d.status.cmd,
+                        d.status.label,
+                        d.restart,
+                        d.target
+                            .unwrap_or_else(|| env!("NOCKD_DEFAULT_TARGET").to_string()),
+                        d.args,
+                    )
+                } else {
+                    (
+                        name, project, bin, jam, endpoint, health_addr, status_cmd,
+                        status_label, restart, target, args,
+                    )
+                };
+
             let (name, bin_path, jam_path, provenance) = if let Some(proj) = project {
                 let built = buildkit::build_project(&proj)?;
                 let name = name.unwrap_or(built.name);

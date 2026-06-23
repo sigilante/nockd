@@ -82,39 +82,54 @@ pub fn now_secs() -> i64 {
         .unwrap_or(0)
 }
 
-/// The deploy manifest (`nockd.toml`) — runtime config owned by nockd (DESIGN §7.2).
-/// Defined ahead of use: `nockd deploy` currently takes flags; reading `nockd.toml` is the
-/// next wire-up.
-#[allow(dead_code)]
+/// The deploy manifest (`nockd.toml`) — declarative, version-controllable deploy config
+/// owned by nockd (DESIGN §7.2). `nockd deploy -f nockd.toml` reads everything from here.
 #[derive(Debug, Clone, Deserialize)]
 pub struct DeployManifest {
     pub deploy: DeploySection,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[allow(dead_code)]
 pub struct DeploySection {
+    /// App name (referenced by ps/logs/stop; names the state dir).
     pub app: String,
+    /// Build mode: a project dir built via `nockup` (alternative to bin/jam).
+    #[serde(default)]
+    pub project: Option<PathBuf>,
+    /// Prebuilt mode: the wrapper binary, and an optional kernel (omit for binary-only apps).
+    #[serde(default)]
+    pub bin: Option<PathBuf>,
+    #[serde(default)]
+    pub jam: Option<PathBuf>,
     #[serde(default = "default_restart")]
     pub restart: String,
+    /// Target triple recorded in artifact identity (defaults to the daemon's).
+    #[serde(default)]
+    pub target: Option<String>,
+    /// Arguments passed through to the app process.
     #[serde(default)]
     pub args: Vec<String>,
+    /// App's private/admin gRPC address for the health probe.
     #[serde(default)]
-    pub nockchain: Option<NockchainSection>,
+    pub health_addr: Option<String>,
+    /// Named Nockchain endpoint this app attaches to (see the endpoint registry).
+    #[serde(default)]
+    pub endpoint: Option<String>,
+    /// Custom status command + label (e.g. block height).
+    #[serde(default)]
+    pub status: StatusSection,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-#[allow(dead_code)]
-pub struct NockchainSection {
-    /// A public-gRPC endpoint URL `http://host:port` (DESIGN §5.3).
-    pub endpoint: Option<String>,
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct StatusSection {
+    pub label: Option<String>,
+    pub cmd: Option<String>,
 }
 
 fn default_restart() -> String {
     "on-failure".to_string()
 }
 
-#[allow(dead_code)]
 impl DeployManifest {
     pub fn load(path: &std::path::Path) -> Result<Self> {
         let text = std::fs::read_to_string(path)

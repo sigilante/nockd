@@ -39,6 +39,9 @@ pub enum Commands {
     Deploy {
         /// App name (required for prebuilt mode; inferred from the manifest with --project).
         name: Option<String>,
+        /// Read all deploy config from a nockd.toml manifest (flags are ignored).
+        #[arg(long, short = 'f')]
+        manifest: Option<PathBuf>,
         /// Project directory to build with `nockup`.
         #[arg(long)]
         project: Option<PathBuf>,

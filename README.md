@@ -70,6 +70,29 @@ nockd dash                                     # live TUI (↑/↓ select · r/s
 nockd logs nockchain
 ```
 
+### Declarative deploy (`nockd.toml`)
+
+Put the whole deployment in a version-controllable manifest and deploy with `-f`:
+
+```toml
+# nockd.toml
+[deploy]
+app         = "nockchain"
+bin         = "/path/to/nockchain"     # or: project = "./myapp" to build via nockup
+restart     = "always"                 # always | on-failure | never
+args        = ["--bind-private-grpc-addr", "127.0.0.1:5555"]
+health_addr = "127.0.0.1:5555"
+endpoint    = "mainnet-rpc"            # named endpoint (see the registry)
+
+[deploy.status]
+label = "BLOCK"
+cmd   = "grep -oE 'block_height=[0-9]+' | tail -1 | grep -oE '[0-9]+'"
+```
+
+```sh
+nockd deploy -f nockd.toml
+```
+
 `nockchain-wallet` is **not** a fit: it's a one-shot command tool (pokes once, exits), not
 a long-lived service to supervise.
 
