@@ -52,9 +52,11 @@ This is feasible *because the NockApp artifact is unusually deployment-friendly*
 - **G4 — Browser dashboard.** A web UI, served from the `nockd` binary, for fleet
   overview, per-app status, live logs, chain-attach health, and lifecycle actions
   (deploy / rollback / restart / stop).
-- **G5 — Verifiable deploys.** Because `hoonc` is byte-reproducible (confirmed) and we
-  pin the Rust toolchain, an artifact is content-addressed. `nockd` can answer "does what
-  is deployed match this source?" with a hash comparison.
+- **G5 — Verifiable deploys (strict).** Both halves of an artifact must be
+  bit-reproducible against pinned source — the kernel (`out.jam`, confirmed reproducible)
+  *and* the Rust binary (pinned toolchain, `--locked`, stripped, path-remapped, no embedded
+  timestamps). The build site asserts reproducibility; `nockd` refuses any artifact whose
+  signed hashes don't match. [Decision: OQ2 = strict both.]
 - **G6 — Light chain-interacting apps are the default tier.** The default deployment is a
   small process dialing a **remote** Nockchain gRPC endpoint (confirmed: remote gRPC is
   the default for Nockchain instances). No colocated node required.
@@ -89,6 +91,13 @@ This is feasible *because the NockApp artifact is unusually deployment-friendly*
    launch, redacted everywhere.
 6. **State is sacred.** Never destroy an app's state dir implicitly. Upgrades and
    rollbacks always preserve a recoverable snapshot.
+7. **Build and run are separate.** The `nockd` **daemon never compiles** — it needs no
+   Rust/`hoonc` toolchain. Artifacts are built where the toolchain already lives (a dev box
+   or CI) and shipped to `nockd`, which only runs them. This keeps the runtime host light
+   enough for a $5 VPS / Pi (G1, G6). [Decision: OQ9.]
+8. **One writer per state dir.** Singular event-sourced state plus two live instances =
+   corruption. `nockd` holds an exclusive lock per state dir; no reconcile bug, restart, or
+   upgrade may ever start a second writer against the same state. [See OQ7.]
 
 ---
 
@@ -214,10 +223,11 @@ A client subcommand with no `--host` talks to the local daemon over the Unix soc
 is the `flyctl`-in-one ergonomic: nothing to install separately, the daemon and the tool
 are the same program.
 
-> **Build dependency:** `nockd deploy` invokes the upstream Nockup/`hoonc` build path to
-> produce the artifact. `nockd` does not reimplement the compiler or the template system
-> (N4). It shells out to / links the toolchain and then takes ownership at the artifact
-> boundary.
+> **Build/run split (principle 7).** Building happens at the **client / CI** side, where
+> the toolchain lives: `nockd deploy` invokes the upstream Nockup/`hoonc` build path,
+> produces the artifact, and uploads it. The **daemon never compiles** and needs no
+> toolchain — it takes ownership at the artifact boundary and only runs. `nockd` does not
+> reimplement the compiler or template system (N4).
 
 ### 5.3 The Nockchain gRPC surface (bedrock — verified against `nockchain/nockchain`)
 
@@ -559,9 +569,13 @@ Browser exposure and wallet keys make this load-bearing, not a footnote.
   file), never logged, never in artifacts, redacted in the dashboard and API responses.
 - **Least privilege.** `nockd` should not require root. Apps run as a dedicated,
   unprivileged user; the state dir and secrets store are owned tightly.
-- **Verifiable artifacts.** Because the build is reproducible, `nockd` can rebuild from
-  pinned source and confirm the deployed artifact hash matches — surfacing
-  "verified ✓ / unverified" per app. This detects tampered or drifted deploys.
+- **Verifiable artifacts (strict, builder-attested).** The daemon has no toolchain
+  (principle 7), so it cannot rebuild — instead the **build site** rebuilds both the kernel
+  and the binary from pinned source, confirms bit-for-bit reproducibility, and emits a
+  signed attestation `{kernel_hash, artifact_hash, target_triple, toolchain_pin}`. `nockd`
+  verifies the artifact against that signature on deploy and refuses a mismatch, surfacing
+  "verified ✓" per app. An independent verifier can rebuild and confirm the same hashes.
+  This detects tampered or drifted deploys without putting a compiler on the runtime host.
 - **Audit log.** Every privileged action (deploy, secret set, endpoint change, rollback)
   is appended to the event log.
 
@@ -607,9 +621,13 @@ secrets backend (stub with a file ref), heavy tier.
 - Multiple apps; endpoint registry; encrypted secrets store.
 
 ### Phase 2 — Upgrades + verification
-- State-preserving kernel upgrade ("molt") against the kernel-side migration contract.
-- Reproducible-build verification ("deployed matches source").
-- Host-to-host state migration.
+- State-preserving kernel upgrade ("molt") orchestrated around the existing upstream
+  contract (§5.4): export → boot-on-same-state → health-gate → swap, with schema-aware
+  rollback.
+- Strict reproducible-build verification (§G5, §10): builder-side double-build + signed
+  attestation `{kernel_hash, artifact_hash, target_triple, toolchain_pin}`; daemon refuses
+  mismatches. Prerequisite: make the Rust binary reproducible (OQ2 open work).
+- Host-to-host state migration via `ExportedState` (EXPJAM).
 
 ### Phase 3 — Fleet + heavy tier
 - Aggregating control plane over multiple `nockd` hosts; optional hosted offering.
@@ -628,26 +646,53 @@ secrets backend (stub with a file ref), heavy tier.
   and uses `ExportedState` (EXPJAM) for backup/restore. Remaining sub-question: a clean
   convention for `nockd` to *detect* the schema-tag change pre-upgrade (read it from the
   source manifest, or peek the built kernel) so it picks the right rollback path (§8.3).
-- **OQ2 — Artifact canonicalization.** Exactly what bytes go into the BLAKE3 hash (jam +
-  binary + which provenance fields) must be pinned so two honest builders agree. The Rust
-  binary's reproducibility (toolchain pin + `--locked` + vendored deps) needs to be
-  validated empirically even though `hoonc`'s is confirmed.
-- **OQ3 — Health semantics.** Resolved into a concrete mechanism (§5.3): probe the app's
-  private gRPC (standard gRPC health + `MonitoringService.Ping`, optional `Poke`/`Peek`)
-  for process/app liveness, and surface chain-attach reachability separately in the
-  dashboard. Remaining detail: the exact "deep" poke each template should answer.
+- **OQ2 — Artifact canonicalization. DECIDED: strict both (§G5, §10).** Two-level identity:
+  `kernel_hash` = BLAKE3 of `out.jam` (== the runtime's `ker_hash`, reproducible, primary,
+  cross-checks running state); `artifact_hash` = BLAKE3 over a canonical bundle
+  `out.jam ‖ stripped-binary ‖ target-triple`, with provenance (build host/time) **excluded
+  from the hashed bytes** and carried in a signed sidecar. Verification gates on **both**
+  being bit-reproducible against pinned source. Open work, not open questions:
+  (a) make the Rust binary actually reproducible — kill the template `build.rs`
+  timestamp/`FULL_VERSION` embedding, add `--remap-path-prefix`, strip, `--locked`, pin
+  per-target; (b) the build-site attestation + signature format; (c) **empirically confirm**
+  with a two-machine double-build of `blackjack` before claiming it publicly.
+- **OQ3 — Health semantics. MOSTLY RESOLVED (§5.3, §8.2).** Four distinct signals, never
+  conflated: (1) process liveness (supervisor); (2) app readiness = gRPC health `SERVING` +
+  `Ping` — *this is the deploy gate*; (3) optional app-semantic `Peek` of a manifest path;
+  (4) chain-attach health as a separate axis — reachability of the public endpoint plus
+  sync-lag read from the public v2 `NockchainMetricsService` (`cache_height` vs
+  `heaviest_height`). **Genuine remaining gotcha:** `nockapp`'s private gRPC calls
+  `set_serving` at startup, so health may read `SERVING` *during event-log replay* — which
+  would let the deploy gate pass before the app is truly caught up. Must confirm whether
+  readiness flips correctly around replay; if not, the gate needs a replay-aware probe
+  (event_num == log max). Code-read away.
 - **OQ4 — gRPC attach detail. RESOLVED (§5.3).** Attachment is a TCP gRPC URL
   `http://host:port` to a node's *public* service (`--bind-public-grpc-addr`, recommended
   `127.0.0.1:5555`), **not** a Unix socket — the old `--nockchain-socket=PATH` idiom is
   superseded. Each app also exposes its own *private* admin gRPC
   (`--bind-private-grpc-addr`/`-port`, default `5555`) which `nockd` binds to localhost for
   health/control. No TLS/auth on either; `nockd` contains them per §10.
-- **OQ5 — Secrets backend.** Phase 1 store: a local encrypted file is the boring default.
-  Decide the KDF/sealing and whether to support external backends (age, system keyring)
-  later.
-- **OQ6 — Daemon restart fidelity.** On `nockd` restart, observed state is rebuilt from
-  desired state + live process discovery. Define how orphaned child processes are
-  re-adopted vs. restarted.
+- **OQ5 — Secrets backend.** Pluggable trait, one impl first: an age-style sealed file with
+  the master key in a `0600` file owned by the `nockd` user (upgradeable to OS keyring).
+  Resolve into the child's env or a tmpfs file at launch; never disk-clear, never logged,
+  redacted in API/dashboard. Open: key rotation + audit; future option of injecting secrets
+  via private-gRPC `Poke` (no env exposure) for apps that support it.
+- **OQ6 — Daemon restart fidelity.** Re-adopt survivors, don't blind-restart: per-app run
+  dir with a pidfile + admin gRPC addr + a nonce the app echoes via `Peek`; on restart, ping
+  it, re-attach if the right app answers, else clean up and restart. Must compose with OQ7
+  so re-adoption never races into a double-writer.
+- **OQ7 — Single-writer state locking (safety-critical; principle 8).** `nockd` holds an
+  exclusive lock per state dir so no reconcile bug, restart, or upgrade can start a second
+  writer against singular state. Open: lock mechanism (flock on a lockfile in the state dir
+  vs. the PMA's own trailer/lock) and stale-lock recovery after a hard crash.
+- **OQ8 — Resource limits / OOM.** OOM is what killed Replit, so even the advisory default
+  tier must monitor RSS, restart on OOM, and surface RSS-vs-limit in the dashboard. Enforced
+  cgroups/VM sizing arrive with the heavy tier (phase 3). Open: per-OS strategy (cgroups v2
+  on Linux; best-effort on macOS dev).
+- **OQ9 — Build/run location. DECIDED: build elsewhere, run only (principle 7).** The
+  daemon never compiles and needs no toolchain; artifacts are built at the client/CI side
+  and shipped. Open: artifact upload/transport format and the `nockd deploy` build-then-push
+  flow.
 
 ---
 
