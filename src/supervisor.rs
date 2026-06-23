@@ -33,11 +33,9 @@ pub enum RunState {
 }
 
 struct Managed {
-    /// Set when this daemon spawned the process and owns its handle. `None` + `adopted` means
-    /// a process re-adopted from a previous daemon, monitored by pid.
+    /// This daemon owns every supervised process for its lifetime — apps do not survive a
+    /// daemon restart (clean model: graceful stop on shutdown, fresh spawn on start).
     child: Option<Child>,
-    /// True for a re-adopted process (no owned `Child`; liveness checked via the pid).
-    adopted: bool,
     pid: Option<u32>,
     started_at: i64,
     restarts: u32,
@@ -58,7 +56,6 @@ impl Default for Managed {
     fn default() -> Self {
         Managed {
             child: None,
-            adopted: false,
             pid: None,
             started_at: 0,
             restarts: 0,
@@ -85,6 +82,7 @@ pub struct RuntimeStatus {
 pub struct Supervisor {
     paths: Paths,
     procs: Mutex<HashMap<String, Managed>>,
+    shutting_down: std::sync::atomic::AtomicBool,
 }
 
 const MAX_BACKOFF_SECS: i64 = 60;
@@ -98,6 +96,7 @@ impl Supervisor {
         Supervisor {
             paths,
             procs: Mutex::new(HashMap::new()),
+            shutting_down: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -152,37 +151,34 @@ impl Supervisor {
 
     /// Reconcile observed state to desired state. Called on a timer and after mutations.
     pub fn reconcile(&self, registry: &Registry, store: &Store) -> Result<()> {
+        // During shutdown we are tearing apps down; don't fight it by respawning.
+        if self.shutting_down.load(std::sync::atomic::Ordering::SeqCst) {
+            return Ok(());
+        }
+
         let apps = registry.list_apps()?;
         let desired_names: std::collections::HashSet<&str> =
             apps.iter().map(|a| a.name.as_str()).collect();
 
         let mut procs = self.procs.lock().unwrap();
 
-        // Reap exited processes — owned children via try_wait, re-adopted ones via pid
-        // liveness — escalate stalled terminations, and update state.
+        // Reap exited children, escalate stalled terminations, and update state.
         for (name, m) in procs.iter_mut() {
-            let exited: Option<i32> = if let Some(child) = m.child.as_mut() {
-                match child.try_wait() {
+            let exited: Option<i32> = match m.child.as_mut() {
+                Some(child) => match child.try_wait() {
                     Ok(Some(status)) => Some(status.code().unwrap_or(-1)),
                     Ok(None) => None,
                     Err(e) => {
                         warn!(app = %name, error = %e, "try_wait failed");
                         None
                     }
-                }
-            } else if m.adopted {
-                match m.pid {
-                    Some(pid) if !pid_alive(pid) => Some(-1), // adopted: exit code unknown
-                    _ => None,
-                }
-            } else {
-                None
+                },
+                None => None,
             };
 
             if let Some(code) = exited {
                 m.child = None;
                 m.pid = None;
-                m.adopted = false;
                 let _ = std::fs::remove_file(self.paths.pid_file(name));
                 if m.restart_requested {
                     // Operator-initiated restart: no penalty, restart next tick.
@@ -234,7 +230,7 @@ impl Supervisor {
         for app in &apps {
             let entry = procs.entry(app.name.clone()).or_default();
 
-            let running = entry.child.is_some() || entry.adopted;
+            let running = entry.child.is_some();
 
             if app.desired_status == "stopped" {
                 if running {
@@ -281,7 +277,6 @@ impl Supervisor {
                     let pid = child.id();
                     entry.pid = pid;
                     entry.child = Some(child);
-                    entry.adopted = false;
                     entry.started_at = now_secs();
                     entry.state = RunState::Running;
                     entry.health = HealthState::Unknown;
@@ -340,49 +335,83 @@ impl Supervisor {
         Ok(child)
     }
 
-    /// Re-adopt an already-running process (a survivor of a previous daemon) by pid, so a
-    /// daemon restart doesn't orphan it and spawn a conflicting duplicate (OQ6).
-    pub fn adopt(&self, name: &str, pid: u32, started_at: i64) {
-        let mut procs = self.procs.lock().unwrap();
-        let m = procs.entry(name.to_string()).or_default();
-        m.child = None;
-        m.adopted = true;
-        m.pid = Some(pid);
-        m.started_at = started_at;
-        m.state = RunState::Running;
-        m.health = HealthState::Unknown;
-        info!(app = %name, pid, "re-adopted running instance");
-    }
-
-    /// On daemon startup, re-adopt any desired-running app whose recorded pid is still alive
-    /// (it survived a daemon restart thanks to its own process group). Stale pidfiles are
-    /// cleaned. Note: relies on pid liveness; a recycled pid is a small, accepted risk.
-    pub fn reattach(&self, registry: &Registry) {
+    /// On startup, clean up any process left by a previous (unclean) daemon death. We do NOT
+    /// re-adopt — this daemon spawns fresh instances. SIGTERM each leftover for a clean PMA
+    /// flush, escalate to SIGKILL, and clear the pidfile, so reconcile starts from a blank
+    /// slate with no duplicates or stale state.
+    pub async fn cleanup_orphans(&self, registry: &Registry) {
         let apps = match registry.list_apps() {
             Ok(a) => a,
             Err(_) => return,
         };
-        for app in apps {
-            if app.desired_status != "running" {
-                continue;
-            }
+        let mut killed = Vec::new();
+        for app in &apps {
             let pidfile = self.paths.pid_file(&app.name);
-            let Ok(contents) = std::fs::read_to_string(&pidfile) else {
-                continue;
-            };
-            let mut parts = contents.split_whitespace();
-            let Some(pid) = parts.next().and_then(|s| s.parse::<u32>().ok()) else {
-                continue;
-            };
-            let started_at = parts
-                .next()
-                .and_then(|s| s.parse::<i64>().ok())
-                .unwrap_or_else(now_secs);
-            if pid_alive(pid) {
-                self.adopt(&app.name, pid, started_at);
-            } else {
-                let _ = std::fs::remove_file(&pidfile);
+            if let Ok(contents) = std::fs::read_to_string(&pidfile) {
+                if let Some(pid) = contents
+                    .split_whitespace()
+                    .next()
+                    .and_then(|s| s.parse::<u32>().ok())
+                {
+                    if pid_alive(pid) {
+                        warn!(app = %app.name, pid, "orphan from a previous daemon → SIGTERM");
+                        send_term(pid);
+                        killed.push(pid);
+                    }
+                }
             }
+            let _ = std::fs::remove_file(&pidfile);
+        }
+        if !killed.is_empty() {
+            wait_for_exit(&killed).await;
+            for pid in killed {
+                if pid_alive(pid) {
+                    send_kill(pid);
+                }
+            }
+        }
+    }
+
+    /// Gracefully stop every managed app (called on daemon shutdown): SIGTERM, wait the grace
+    /// period for a clean PMA flush, SIGKILL stragglers, and clear pidfiles. Sets a flag so
+    /// the reconcile loop won't respawn while we tear down.
+    pub async fn stop_all(&self) {
+        self.shutting_down
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        // Take the child handles so we can SIGTERM and then await (reap) them — the reconcile
+        // loop is paused, so nothing else will reap, and an unreaped child lingers as a zombie.
+        let children: Vec<(u32, Child)> = {
+            let mut procs = self.procs.lock().unwrap();
+            procs
+                .values_mut()
+                .filter_map(|m| Some((m.pid?, m.child.take()?)))
+                .collect()
+        };
+        if !children.is_empty() {
+            info!(count = children.len(), "stopping all apps (SIGTERM)");
+            for (pid, _) in &children {
+                send_term(*pid);
+            }
+            // SIGTERM was sent to all up front, so they exit in parallel; await each with a
+            // grace cap, escalating to SIGKILL on timeout.
+            for (_, mut child) in children {
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(GRACE_SECS as u64),
+                    child.wait(),
+                )
+                .await
+                {
+                    Ok(_) => {}
+                    Err(_) => {
+                        let _ = child.start_kill();
+                        let _ = child.wait().await;
+                    }
+                }
+            }
+        }
+        let procs = self.procs.lock().unwrap();
+        for name in procs.keys() {
+            let _ = std::fs::remove_file(self.paths.pid_file(name));
         }
     }
 }
@@ -390,6 +419,17 @@ impl Supervisor {
 /// Whether a pid is alive (kill with signal 0 probes existence without delivering a signal).
 fn pid_alive(pid: u32) -> bool {
     unsafe { libc::kill(pid as libc::pid_t, 0) == 0 }
+}
+
+/// Wait (polling) until all pids exit, capped at the grace period — so a clean shutdown is
+/// fast for well-behaved apps but bounded for stuck ones.
+async fn wait_for_exit(pids: &[u32]) {
+    for _ in 0..(GRACE_SECS * 5) {
+        if pids.iter().all(|p| !pid_alive(*p)) {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
 }
 
 /// Force-kill a process by pid (SIGKILL).

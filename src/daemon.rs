@@ -150,9 +150,9 @@ async fn run_status_cmd(
 }
 
 pub async fn serve(daemon: Arc<Daemon>, host: IpAddr, port: u16) -> Result<()> {
-    // Re-adopt any apps that survived a previous daemon (process-group isolated), so we
-    // don't spawn conflicting duplicates (OQ6).
-    daemon.supervisor.reattach(&daemon.registry);
+    // Clean up any process left by a previous unclean daemon death (SIGTERM → flush → kill),
+    // then start fresh. No survival/re-adoption: this daemon owns its apps for its lifetime.
+    daemon.supervisor.cleanup_orphans(&daemon.registry).await;
 
     // Background reconcile loop (DESIGN §5.1).
     let bg = daemon.clone();
@@ -223,6 +223,37 @@ pub async fn serve(daemon: Arc<Daemon>, host: IpAddr, port: u16) -> Result<()> {
         .await
         .with_context(|| format!("binding {host}:{port}"))?;
     info!("nockd listening on http://{host}:{port}  (dashboard at /)");
-    axum::serve(listener, app).await.context("http server")?;
+
+    // Gracefully stop managed apps on SIGINT/SIGTERM so they get a clean shutdown (PMA flush)
+    // instead of being orphaned or hard-killed — this is what keeps state from corrupting.
+    let shutdown = daemon.clone();
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async move {
+            shutdown_signal().await;
+            info!("shutdown signal received; stopping managed apps");
+            shutdown.supervisor.stop_all().await;
+        })
+        .await
+        .context("http server")?;
     Ok(())
+}
+
+/// Resolve when the process receives SIGINT (Ctrl-C) or SIGTERM.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        let _ = tokio::signal::ctrl_c().await;
+    };
+    #[cfg(unix)]
+    let term = async {
+        if let Ok(mut s) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        {
+            s.recv().await;
+        }
+    };
+    #[cfg(not(unix))]
+    let term = std::future::pending::<()>();
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = term => {},
+    }
 }
