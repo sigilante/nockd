@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use axum::extract::{Path, Query, State};
+use axum::extract::{DefaultBodyLimit, Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
@@ -70,6 +70,10 @@ pub fn router(daemon: Arc<Daemon>) -> Router {
         .route("/api/apps/:name/start", post(start))
         .route("/api/apps/:name/logs", get(logs))
         .route("/api/events", get(events))
+        // Artifact uploads (binary + kernel, base64) blow past axum's 2 MB default. Allow
+        // large bodies for now; streaming/multipart upload is a later refinement (DESIGN
+        // §9 API). 1 GiB is generous for a NockApp binary (e.g. nockchain).
+        .layer(DefaultBodyLimit::max(1024 * 1024 * 1024))
         .with_state(daemon)
 }
 
