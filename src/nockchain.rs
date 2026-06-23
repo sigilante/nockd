@@ -28,8 +28,9 @@ pub struct GetExplorerMetricsResponse {
 }
 
 /// Query `nockchain.public.v2.NockchainMetricsService/GetExplorerMetrics` on an established
-/// gRPC channel and return the heaviest (chain-tip) block height, if available. Returns
-/// `None` if the endpoint isn't a Nockchain v2 public server or the explorer cache is cold.
+/// gRPC channel. Returns `Some(heaviest_height)` if the call succeeded (which also proves the
+/// endpoint is a reachable Nockchain v2 gRPC server) — the height may be 0 if the explorer
+/// cache is still cold. Returns `None` only if the call itself failed.
 pub async fn explorer_height(channel: Channel) -> Option<u64> {
     let mut grpc = tonic::client::Grpc::new(channel);
     grpc.ready().await.ok()?;
@@ -46,6 +47,5 @@ pub async fn explorer_height(channel: Channel) -> Option<u64> {
         )
         .await
         .ok()?;
-    let height = resp.into_inner().metrics?.heaviest_height;
-    (height > 0).then_some(height)
+    Some(resp.into_inner().metrics?.heaviest_height)
 }

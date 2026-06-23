@@ -39,8 +39,6 @@ pub struct EndpointProbe {
 pub async fn probe_endpoint(url: &str) -> EndpointProbe {
     use std::time::{Duration, Instant};
     use tonic::transport::Endpoint;
-    use tonic_health::pb::health_client::HealthClient;
-    use tonic_health::pb::HealthCheckRequest;
 
     let down = EndpointProbe {
         reachable: false,
@@ -53,33 +51,44 @@ pub async fn probe_endpoint(url: &str) -> EndpointProbe {
     } else {
         format!("http://{url}")
     };
-    let endpoint = match Endpoint::from_shared(uri) {
+    let is_https = uri.starts_with("https://");
+    let mut endpoint = match Endpoint::from_shared(uri) {
         Ok(e) => e
             .connect_timeout(Duration::from_secs(2))
             .timeout(Duration::from_secs(3)),
         Err(_) => return down,
     };
-
-    let start = Instant::now();
-    let Ok(channel) = endpoint.connect().await else {
-        return down; // gRPC channel won't establish → unreachable
-    };
-    let mut client = HealthClient::new(channel.clone());
-    let reachable = client
-        .check(HealthCheckRequest {
-            service: String::new(),
-        })
-        .await
-        .is_ok();
-    if !reachable {
-        return down;
+    // Public endpoints like https://rpc.nockchain.net are TLS on 443; configure TLS with
+    // bundled webpki roots so we can probe them.
+    if is_https {
+        match endpoint.tls_config(tonic::transport::ClientTlsConfig::new().with_webpki_roots()) {
+            Ok(e) => endpoint = e,
+            Err(_) => return down,
+        }
     }
-    let lag_ms = Some(start.elapsed().as_millis() as u64);
+
+    // Reachability = the gRPC channel establishes (TCP + TLS + HTTP/2 handshake). This is
+    // protocol-level reachability that doesn't depend on which services the endpoint
+    // registers — some Nockchain endpoints expose their services without the standard gRPC
+    // health service, so gating on a specific RPC would falsely report them down.
+    let connect_start = Instant::now();
+    let Ok(channel) = endpoint.connect().await else {
+        return down;
+    };
+
+    // Chain height is best-effort (Nockchain v2 metrics); when it works it also gives a real
+    // RPC round-trip for the lag, otherwise we report the connect time.
+    let rpc_start = Instant::now();
     let height = crate::nockchain::explorer_height(channel).await;
+    let lag_ms = if height.is_some() {
+        Some(rpc_start.elapsed().as_millis() as u64)
+    } else {
+        Some(connect_start.elapsed().as_millis() as u64)
+    };
     EndpointProbe {
-        reachable,
+        reachable: true,
         lag_ms,
-        height,
+        height: height.filter(|h| *h > 0),
     }
 }
 
