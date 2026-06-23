@@ -24,36 +24,43 @@ pub enum HealthState {
     Unknown,
 }
 
-/// Reachability + connect-time of an endpoint URL (e.g. `http://host:port`). A TCP connect
-/// is a cheap liveness signal for a Nockchain RPC endpoint; full gRPC/sync-lag probing is a
-/// later refinement (DESIGN §5.3 — chain-attach).
+/// Reachability + gRPC round-trip latency of a Nockchain endpoint URL (`http://host:port`).
+/// A real gRPC handshake + standard health check — stronger than a raw TCP connect (a plain
+/// open port that isn't gRPC will not pass) and gives true round-trip latency for the lag
+/// display. The Nockchain public server registers the standard gRPC health service, so an
+/// empty-service check works. Returns (reachable, latency_ms).
 pub async fn probe_endpoint(url: &str) -> (bool, Option<u64>) {
-    let Some(host_port) = host_port_from_url(url) else {
-        return (false, None);
-    };
-    let start = std::time::Instant::now();
-    let connect = tokio::net::TcpStream::connect(&host_port);
-    match tokio::time::timeout(std::time::Duration::from_millis(1500), connect).await {
-        Ok(Ok(_)) => (true, Some(start.elapsed().as_millis() as u64)),
-        _ => (false, None),
-    }
-}
+    use std::time::{Duration, Instant};
+    use tonic::transport::Endpoint;
+    use tonic_health::pb::health_client::HealthClient;
+    use tonic_health::pb::HealthCheckRequest;
 
-/// Extract `host:port` from a URL, defaulting the port to 5555 (the Nockchain gRPC default).
-fn host_port_from_url(url: &str) -> Option<String> {
-    let s = url
-        .split_once("://")
-        .map(|(_, rest)| rest)
-        .unwrap_or(url)
-        .trim_end_matches('/');
-    let authority = s.split(['/', '?']).next().unwrap_or(s);
-    if authority.is_empty() {
-        return None;
-    }
-    if authority.contains(':') {
-        Some(authority.to_string())
+    let uri = if url.contains("://") {
+        url.to_string()
     } else {
-        Some(format!("{authority}:5555"))
+        format!("http://{url}")
+    };
+    let endpoint = match Endpoint::from_shared(uri) {
+        Ok(e) => e
+            .connect_timeout(Duration::from_secs(2))
+            .timeout(Duration::from_secs(3)),
+        Err(_) => return (false, None),
+    };
+
+    let start = Instant::now();
+    let Ok(channel) = endpoint.connect().await else {
+        return (false, None); // gRPC channel won't establish → unreachable
+    };
+    let mut client = HealthClient::new(channel);
+    match client
+        .check(HealthCheckRequest {
+            service: String::new(),
+        })
+        .await
+    {
+        // Any health response means the gRPC server answered — reachable, with real RTT.
+        Ok(_) => (true, Some(start.elapsed().as_millis() as u64)),
+        Err(_) => (false, None),
     }
 }
 
