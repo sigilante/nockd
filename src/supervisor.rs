@@ -272,7 +272,15 @@ impl Supervisor {
                 continue;
             }
 
-            match self.spawn(app, store) {
+            // Resolve the app's named endpoint to its URL (registry), so apps reference an
+            // endpoint by name and the URL can change without redeploying.
+            let endpoint_url = app
+                .endpoint
+                .as_deref()
+                .and_then(|name| registry.get_endpoint(name).ok().flatten())
+                .map(|e| e.url);
+
+            match self.spawn(app, endpoint_url.as_deref(), store) {
                 Ok(child) => {
                     let pid = child.id();
                     entry.pid = pid;
@@ -306,8 +314,10 @@ impl Supervisor {
     }
 
     /// Spawn one instance: stage the kernel into the state dir, run the binary there with
-    /// stdout/stderr captured to the app's log file.
-    fn spawn(&self, app: &AppRow, store: &Store) -> Result<Child> {
+    /// stdout/stderr captured to the app's log file. The `{endpoint}` placeholder in args is
+    /// substituted with the resolved endpoint URL, which is also exported as
+    /// `NOCKD_ENDPOINT_URL` for apps that read config from the environment.
+    fn spawn(&self, app: &AppRow, endpoint_url: Option<&str>, store: &Store) -> Result<Child> {
         let state_dir = self.paths.state_dir(&app.name);
         store.stage_jam(&app.artifact_hash, &state_dir)?;
 
@@ -319,17 +329,27 @@ impl Supervisor {
             .with_context(|| format!("opening log {}", log_path.display()))?;
         let err = out.try_clone().context("cloning log handle")?;
 
+        let args: Vec<String> = match endpoint_url {
+            Some(url) => app.args.iter().map(|a| a.replace("{endpoint}", url)).collect(),
+            None => app.args.clone(),
+        };
+
         let bin = store.bin_path(&app.artifact_hash);
-        let child = Command::new(&bin)
+        let mut command = Command::new(&bin);
+        command
             .current_dir(&state_dir)
-            .args(&app.args)
+            .args(&args)
             .stdout(Stdio::from(out))
             .stderr(Stdio::from(err))
             // Own process group: a supervised app must NOT receive the daemon's controlling-
             // terminal signals. Otherwise Ctrl-C'ing `nockd serve` SIGINTs every app too
             // (nockchain was exiting 130/143 for exactly this reason). nockd still stops apps
             // deliberately via kill(pid, …).
-            .process_group(0)
+            .process_group(0);
+        if let Some(url) = endpoint_url {
+            command.env("NOCKD_ENDPOINT_URL", url);
+        }
+        let child = command
             .spawn()
             .with_context(|| format!("spawning {}", bin.display()))?;
         Ok(child)

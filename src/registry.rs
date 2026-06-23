@@ -274,6 +274,23 @@ impl Registry {
         Ok(conn.execute("DELETE FROM endpoint WHERE name=?1", [name])?)
     }
 
+    pub fn get_endpoint(&self, name: &str) -> Result<Option<EndpointRow>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt =
+            conn.prepare("SELECT name, url, kind, created_at FROM endpoint WHERE name = ?1")?;
+        let row = stmt
+            .query_row([name], |row| {
+                Ok(EndpointRow {
+                    name: row.get(0)?,
+                    url: row.get(1)?,
+                    kind: row.get(2)?,
+                    created_at: row.get(3)?,
+                })
+            })
+            .ok();
+        Ok(row)
+    }
+
     pub fn list_endpoints(&self) -> Result<Vec<EndpointRow>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
