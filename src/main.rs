@@ -10,6 +10,7 @@ mod config;
 mod daemon;
 mod dashboard;
 mod health;
+mod nockchain;
 mod registry;
 mod store;
 mod supervisor;
@@ -199,17 +200,24 @@ async fn main() -> Result<()> {
                     if arr.is_empty() {
                         println!("no endpoints registered");
                     } else {
-                        println!("{:<16} {:<10} {:<32} {:<10} {}", "NAME", "REACH", "URL", "LAG", "APPS");
+                        println!(
+                            "{:<16} {:<8} {:<30} {:<8} {:<12} {:<8} {}",
+                            "NAME", "REACH", "URL", "LAG", "HEIGHT", "BEHIND", "APPS"
+                        );
                         for e in arr {
                             let reach = if e["reachable"].as_bool().unwrap_or(false) { "ok" } else { "down" };
                             let lag = e["lag_ms"].as_u64().map(|l| format!("{l}ms")).unwrap_or_else(|| "—".into());
+                            let height = e["height"].as_u64().map(|h| h.to_string()).unwrap_or_else(|| "—".into());
+                            let behind = e["behind"].as_u64().map(|b| if b == 0 { "tip".into() } else { format!("-{b}") }).unwrap_or_else(|| "—".into());
                             let apps = e["attached_apps"].as_array().map(|a| a.len()).unwrap_or(0);
                             println!(
-                                "{:<16} {:<10} {:<32} {:<10} {}",
+                                "{:<16} {:<8} {:<30} {:<8} {:<12} {:<8} {}",
                                 e["name"].as_str().unwrap_or(""),
                                 reach,
                                 e["url"].as_str().unwrap_or(""),
                                 lag,
+                                height,
+                                behind,
                                 apps,
                             );
                         }

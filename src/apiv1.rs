@@ -215,6 +215,10 @@ pub struct EndpointV1 {
     pub kind: String,
     pub reachable: bool,
     pub lag_ms: Option<u64>,
+    /// Chain-tip block height (Nockchain v2 endpoints).
+    pub height: Option<u64>,
+    /// Blocks behind the most-current reachable endpoint (0 = leading).
+    pub behind: Option<u64>,
     pub attached_apps: Vec<String>,
 }
 
@@ -238,10 +242,14 @@ pub async fn list_endpoints(State(d): State<Arc<Daemon>>) -> impl IntoResponse {
     let apps = d.registry.list_apps().unwrap_or_default();
     let mut out = Vec::with_capacity(endpoints.len());
     for ep in endpoints {
-        let (reachable, lag_ms) = if ep.kind == "remote" {
+        let probe = if ep.kind == "remote" {
             crate::health::probe_endpoint(&ep.url).await
         } else {
-            (std::path::Path::new(&ep.url).exists(), None)
+            crate::health::EndpointProbe {
+                reachable: std::path::Path::new(&ep.url).exists(),
+                lag_ms: None,
+                height: None,
+            }
         };
         let attached_apps = apps
             .iter()
@@ -252,10 +260,20 @@ pub async fn list_endpoints(State(d): State<Arc<Daemon>>) -> impl IntoResponse {
             name: ep.name,
             url: ep.url,
             kind: ep.kind,
-            reachable,
-            lag_ms,
+            reachable: probe.reachable,
+            lag_ms: probe.lag_ms,
+            height: probe.height,
+            behind: None, // filled below once we know the max height
             attached_apps,
         });
+    }
+    // "Behind" is relative to the most-current reachable endpoint we can see.
+    if let Some(tip) = out.iter().filter_map(|e| e.height).max() {
+        for e in &mut out {
+            if let Some(h) = e.height {
+                e.behind = Some(tip.saturating_sub(h));
+            }
+        }
     }
     Json(out).into_response()
 }

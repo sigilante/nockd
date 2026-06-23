@@ -28,6 +28,7 @@ reqwest = { version = "0.12", default-features = false, features = ["json"] }
 dirs = "5"
 tonic = "0.12"
 tonic-health = "0.12"
+prost = "0.13"
 ratatui = "0.28"
 crossterm = "0.28"
 libc = "0.2"

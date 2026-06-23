@@ -356,6 +356,7 @@ function endpointsView() {
         <div class="body">
           <div class="tname">${esc(e.name)} <span class="tag" style="font-size:10px">${esc(e.kind)}</span></div>
           <div class="meta">${esc(e.url)}</div>
+          ${e.height != null ? `<div class="meta">block ${e.height}${e.behind ? ` · ${e.behind} behind` : ' · tip'}</div>` : ''}
           <div style="height:8px;background:var(--track);margin:6px 0"><div style="height:100%;${barFill}"></div></div>
           <div class="tfoot"><span>ATTACHED · ${e.attached_apps.length} APPS</span><span class="rm" style="cursor:pointer">✕</span></div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">${chips}</div>

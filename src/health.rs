@@ -24,16 +24,29 @@ pub enum HealthState {
     Unknown,
 }
 
-/// Reachability + gRPC round-trip latency of a Nockchain endpoint URL (`http://host:port`).
-/// A real gRPC handshake + standard health check — stronger than a raw TCP connect (a plain
-/// open port that isn't gRPC will not pass) and gives true round-trip latency for the lag
-/// display. The Nockchain public server registers the standard gRPC health service, so an
-/// empty-service check works. Returns (reachable, latency_ms).
-pub async fn probe_endpoint(url: &str) -> (bool, Option<u64>) {
+/// Result of probing a Nockchain endpoint.
+pub struct EndpointProbe {
+    pub reachable: bool,
+    pub lag_ms: Option<u64>,
+    /// Chain-tip (heaviest) block height from the public metrics service, if it's a Nockchain
+    /// v2 endpoint with a warm explorer cache.
+    pub height: Option<u64>,
+}
+
+/// Probe a Nockchain endpoint URL (`http://host:port`): a real gRPC handshake + standard
+/// health check (stronger than a raw TCP connect; gives true round-trip latency), plus the
+/// chain-tip height from `NockchainMetricsService` (special-cased — see `nockchain.rs`).
+pub async fn probe_endpoint(url: &str) -> EndpointProbe {
     use std::time::{Duration, Instant};
     use tonic::transport::Endpoint;
     use tonic_health::pb::health_client::HealthClient;
     use tonic_health::pb::HealthCheckRequest;
+
+    let down = EndpointProbe {
+        reachable: false,
+        lag_ms: None,
+        height: None,
+    };
 
     let uri = if url.contains("://") {
         url.to_string()
@@ -44,23 +57,29 @@ pub async fn probe_endpoint(url: &str) -> (bool, Option<u64>) {
         Ok(e) => e
             .connect_timeout(Duration::from_secs(2))
             .timeout(Duration::from_secs(3)),
-        Err(_) => return (false, None),
+        Err(_) => return down,
     };
 
     let start = Instant::now();
     let Ok(channel) = endpoint.connect().await else {
-        return (false, None); // gRPC channel won't establish → unreachable
+        return down; // gRPC channel won't establish → unreachable
     };
-    let mut client = HealthClient::new(channel);
-    match client
+    let mut client = HealthClient::new(channel.clone());
+    let reachable = client
         .check(HealthCheckRequest {
             service: String::new(),
         })
         .await
-    {
-        // Any health response means the gRPC server answered — reachable, with real RTT.
-        Ok(_) => (true, Some(start.elapsed().as_millis() as u64)),
-        Err(_) => (false, None),
+        .is_ok();
+    if !reachable {
+        return down;
+    }
+    let lag_ms = Some(start.elapsed().as_millis() as u64);
+    let height = crate::nockchain::explorer_height(channel).await;
+    EndpointProbe {
+        reachable,
+        lag_ms,
+        height,
     }
 }
 

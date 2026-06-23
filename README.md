@@ -102,12 +102,20 @@ name (the `endpoint` field), so the URL can change without redeploying.
 
 ```sh
 nockd endpoint add mainnet-rpc http://<host>:5555
-nockd endpoint ls                 # NAME · REACH · URL · LAG · APPS
+nockd endpoint ls            # NAME · REACH · URL · LAG · HEIGHT · BEHIND · APPS
 nockd endpoint rm mainnet-rpc
 ```
 
-They're also managed from the dashboard's **ENDPOINTS** screen (add / remove / live
-reachability tiles).
+Reachability is a real gRPC handshake + health check (true round-trip latency), and for
+Nockchain endpoints nockd reads the **chain-tip block height** from the public metrics
+service — so `endpoint ls` and the dashboard tiles show each endpoint's height and how many
+blocks it is **behind** the most-current one. Also managed from the dashboard's **ENDPOINTS**
+screen (add / remove / live tiles).
+
+An app references an endpoint **by name** (`--endpoint mainnet-rpc`); nockd injects the URL
+at launch — `{endpoint}` in the app's args is replaced with the URL, and `NOCKD_ENDPOINT_URL`
+is set — so you can re-point an endpoint (`nockd endpoint add <name> <new-url>` + restart)
+without redeploying.
 
 `nockchain-wallet` is **not** a fit: it's a one-shot command tool (pokes once, exits), not
 a long-lived service to supervise.
