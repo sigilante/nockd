@@ -127,7 +127,8 @@ heavy. So the default deploy is "small process + remote RPC URL," not "provision
 | **App** | A named, long-lived deployment. Has desired state: which artifact, config, secrets refs, nockchain attachment, restart policy. The unit a user reasons about. |
 | **Instance** | A running OS process supervised by `nockd` for an App. Light/stateful apps are single-instance by definition (state is local and singular). |
 | **State dir** | The persistent directory `nockd` owns for an App: jam snapshots, event log, app-written files. Never destroyed implicitly. |
-| **Endpoint** | A named Nockchain attachment target (e.g. `mainnet-rpc → grpc://…`). Apps reference endpoints by name so the URL can change without redeploying the app. |
+| **Endpoint** | A named Nockchain attachment target = a **public-gRPC URL** `http://host:port` of a node (e.g. `mainnet-rpc → http://1.2.3.4:5555`). Apps reference endpoints by name so the URL can change without redeploying. See §5.3. |
+| **Admin address** | An app's own inbound **private-gRPC** `host:port` (`Peek`/`Poke`/`Ping`), bound to localhost, that `nockd` uses for health and control. See §5.3. |
 | **Secret** | A named, encrypted-at-rest value (e.g. a wallet key). Apps reference secrets by name; resolved into the process environment/files at launch, redacted everywhere else. |
 | **Desired state** | The declarative record (in SQLite) of what should be running. |
 | **Observed state** | What is actually running, as seen by the supervisor. |
@@ -218,6 +219,56 @@ are the same program.
 > (N4). It shells out to / links the toolchain and then takes ownership at the artifact
 > boundary.
 
+### 5.3 The Nockchain gRPC surface (bedrock — verified against `nockchain/nockchain`)
+
+Confirmed by reading `crates/nockapp-grpc*` and `crates/nockchain/src/config.rs`. These
+are facts `nockd` builds on, not assumptions.
+
+**Transport.** gRPC over HTTP/2 via `tonic`, bound to a **TCP `SocketAddr`** (not a Unix
+socket). Clients connect with a URL string the tonic `Endpoint` accepts — i.e.
+`http://host:port`. **There is no built-in TLS or auth**: the code and its docs explicitly
+say "do NOT expose to an untrusted network… use an SSH tunnel or VPN with firewalling."
+The kernel acknowledges a bind via a `[%grpc-bind result]` effect.
+
+**Three service surfaces:**
+
+1. **Public — `nockchain.public.v1/v2 NockchainService`.** The node's chain API the app
+   *dials outward* to: `WalletGetBalance`, `WalletSendTransaction`, `TransactionAccepted`;
+   v2 adds `NockchainBlockService` (blocks/tx lookup) and `NockchainMetricsService`
+   (explorer/peer/req-res metrics). A node exposes it with
+   `--bind-public-grpc-addr` (**off by default**, recommended `127.0.0.1:5555`). **This is
+   the endpoint a deployed NockApp attaches to.**
+2. **Private — `nockchain.private.v1 NockAppService`.** `Peek` and `Poke` (JAM-encoded
+   path / wire+payload). This is the *admin control channel into a running NockApp*. A node
+   exposes it with `--bind-private-grpc-addr` / `--bind-private-grpc-port`
+   (**default `5555`, localhost**). Marked "core/admin path — do NOT expose to untrusted
+   networks."
+3. **Monitoring — `nockchain.monitoring.v1 MonitoringService`.** A `Ping` RPC. In addition,
+   the servers register the **standard gRPC health service** (`tonic_health`) and
+   reflection.
+
+**What this resolves for `nockd`:**
+
+- **An `endpoint` is a `http://host:port` gRPC URL to a node's *public* service** — not a
+  Unix-socket path. The old `chain` template's `--nockchain-socket=PATH` idiom is
+  superseded by this gRPC-address model. The endpoint registry stores URLs; the default
+  attach is a remote public-gRPC node.
+- **Health gating has a real, ready mechanism.** `nockd` can probe a supervised app's
+  **private gRPC** via `MonitoringService.Ping` and/or the standard gRPC health protocol,
+  and can drive liveness with a `Poke`/`Peek`. The manifest's `health = { poke = "ping" }`
+  maps onto an actual private-gRPC call — apps need not implement a custom HTTP health
+  endpoint.
+- **`nockd` becomes the trusted local front for the unauthenticated private channel.**
+  Because the private/admin gRPC has no TLS or auth, the right pattern is: keep each app's
+  private gRPC bound to **localhost**, let `nockd` (the local supervisor) be the only thing
+  that speaks it, and expose a *safe, authenticated* surface (the `nockd` API + dashboard,
+  §9–§10) on top. For remote *public* endpoints, `nockd` documents SSH-tunnel / VPN /
+  TLS-terminating reverse-proxy as the supported reach, matching upstream guidance.
+
+So an app deployment involves **two gRPC addresses**: the outbound **public** endpoint it
+dials (the chain), and its own inbound **private** admin address that `nockd` binds to
+localhost and uses for health and control.
+
 ---
 
 ## 6. Data model (Registry / SQLite)
@@ -296,13 +347,14 @@ A `nockd.toml` describing how to run the app. Secrets are referenced, never inli
 
 ```toml
 [deploy]
-app      = "blackjack"
-restart  = "on-failure"          # always | on-failure | never
-health   = { poke = "ping", timeout = "5s" }
+app       = "blackjack"
+restart   = "on-failure"         # always | on-failure | never
+health    = { ping = true, timeout = "5s" }   # private-gRPC Ping / health probe (§5.3)
+admin_addr = "127.0.0.1:0"       # app's private gRPC; localhost; 0 = nockd picks a port
 
 [deploy.nockchain]
-endpoint = "mainnet-rpc"         # name registered with `nockd endpoint add`
-# kind/url resolved from the endpoint registry; remote gRPC is the default
+endpoint = "mainnet-rpc"         # name → public-gRPC URL from the endpoint registry
+# resolved to http://host:port; remote public gRPC is the default attach (§5.3)
 
 [deploy.state]
 path   = "/var/lib/nockd/blackjack"
@@ -355,6 +407,11 @@ The supervisor watches each instance. On exit: if policy permits, restart with
 exponential backoff against the existing state dir (the app recovers from its last
 snapshot + event log). Health transitions and crashes are written to the event log and
 shown in the dashboard timeline.
+
+Liveness is probed over the app's **private gRPC admin address** (§5.3): the standard gRPC
+health service and/or `MonitoringService.Ping`, with an optional `Poke`/`Peek` for a
+deeper application-level check. This is also the channel the health gate in §8.1 uses to
+decide whether a freshly deployed instance is serving before the old one is retired.
 
 ### 8.3 State-preserving upgrade — "molt" (phase 2)
 
@@ -424,6 +481,12 @@ Browser exposure and wallet keys make this load-bearing, not a footnote.
 
 - **Bind localhost / Unix socket by default.** The Control API's primary listener is a
   Unix socket gated by file permissions. Remote (TCP) is opt-in.
+- **Contain the unauthenticated NockApp gRPC.** Nockchain's private/admin gRPC has **no
+  TLS and no auth** (§5.3) and is explicitly "not for untrusted networks." `nockd` keeps
+  every supervised app's private/admin address bound to **localhost**, is the only speaker
+  of it, and re-exports a safe, token-authenticated view through its own API/dashboard. For
+  remote *public* (chain) endpoints, `nockd` follows upstream guidance: SSH tunnel, VPN, or
+  a TLS-terminating reverse proxy — never a raw public bind.
 - **Token auth + TLS for remote.** Any non-local access (remote CLI, remote dashboard)
   requires a bearer token (generated by `nockd` on first run, shown once via CLI) over
   TLS (self-signed bootstrap, ACME or reverse-proxy for real certs).
@@ -499,12 +562,16 @@ secrets backend (stub with a file ref), heavy tier.
   binary + which provenance fields) must be pinned so two honest builders agree. The Rust
   binary's reproducibility (toolchain pin + `--locked` + vendored deps) needs to be
   validated empirically even though `hoonc`'s is confirmed.
-- **OQ3 — Health semantics.** Is health a generic app-defined poke (`ping`), a chain-
-  attach liveness probe, or both? Proposed: both — a process/poke health AND a separate
-  chain-attach status, surfaced independently in the dashboard.
-- **OQ4 — gRPC attach detail.** Reconcile the template's `--nockchain-socket=PATH` (Unix
-  socket, colocated) with the remote gRPC URL path. `nockd` supports both `kind`s; confirm
-  the exact flag/format the wrapper expects for a remote URL.
+- **OQ3 — Health semantics.** Resolved into a concrete mechanism (§5.3): probe the app's
+  private gRPC (standard gRPC health + `MonitoringService.Ping`, optional `Poke`/`Peek`)
+  for process/app liveness, and surface chain-attach reachability separately in the
+  dashboard. Remaining detail: the exact "deep" poke each template should answer.
+- **OQ4 — gRPC attach detail. RESOLVED (§5.3).** Attachment is a TCP gRPC URL
+  `http://host:port` to a node's *public* service (`--bind-public-grpc-addr`, recommended
+  `127.0.0.1:5555`), **not** a Unix socket — the old `--nockchain-socket=PATH` idiom is
+  superseded. Each app also exposes its own *private* admin gRPC
+  (`--bind-private-grpc-addr`/`-port`, default `5555`) which `nockd` binds to localhost for
+  health/control. No TLS/auth on either; `nockd` contains them per §10.
 - **OQ5 — Secrets backend.** Phase 1 store: a local encrypted file is the boring default.
   Decide the KDF/sealing and whether to support external backends (age, system keyring)
   later.
