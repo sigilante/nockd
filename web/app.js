@@ -283,6 +283,95 @@ function detailView(name) {
   return () => { es && es.close(); clearInterval(evTimer); };
 }
 
+// ---- Endpoints registry ----
+function endpointsView() {
+  const LAG_THRESHOLD = 800;
+  const epStatus = (e) => (!e.reachable ? 'crashing' : ((e.lag_ms ?? 0) > LAG_THRESHOLD ? 'degraded' : 'running'));
+  const epLabel = (s) => ({ running: 'REACHABLE', degraded: 'HIGH LAG', crashing: 'UNREACHABLE' }[s]);
+  let timer = null;
+
+  async function add() {
+    const name = prompt('Endpoint name (e.g. mainnet-rpc):');
+    if (!name) return;
+    const url = prompt('Public-gRPC URL (e.g. http://host:5555):');
+    if (!url) return;
+    try {
+      await fetch('/api/v1/endpoints', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name, url, kind: 'remote' }),
+      });
+    } catch (_) {}
+    render();
+  }
+  async function remove(name) {
+    if (!confirm(`Remove endpoint ${name}?`)) return;
+    try { await fetch(`/api/v1/endpoints/${encodeURIComponent(name)}`, { method: 'DELETE' }); } catch (_) {}
+    render();
+  }
+
+  async function render() {
+    let eps;
+    try { eps = await getJSON('/api/v1/endpoints'); clearBanner(); }
+    catch (e) { banner(`daemon unreachable — ${e.message}`); return; }
+
+    const reach = eps.filter((e) => epStatus(e) === 'running').length;
+    const lag = eps.filter((e) => epStatus(e) === 'degraded').length;
+    const down = eps.filter((e) => epStatus(e) === 'crashing').length;
+
+    app.innerHTML = '';
+    app.append($(`
+      <div class="stats">
+        <div class="stat"><div class="num">${eps.length}</div><div class="lab">Endpoints</div></div>
+        <div class="stat blue"><div class="num">${reach}</div><div class="lab">Reachable</div></div>
+        <div class="stat yellow"><div class="num">${lag}</div><div class="lab">High lag</div></div>
+        <div class="stat red"><div class="num">${down}</div><div class="lab">Unreachable</div></div>
+      </div>`));
+
+    const bar = $(`<div class="toolbar"><div class="summary">Named Nockchain RPC targets — apps attach by name</div></div>`);
+    const addBtn = $(`<button class="btn primary">+ ADD ENDPOINT</button>`);
+    addBtn.onclick = add;
+    bar.append(addBtn);
+    app.append(bar);
+
+    if (!eps.length) {
+      app.append($(`<div class="empty-tile">No endpoints. Add one above, or <b>nockd endpoint add &lt;name&gt; &lt;url&gt;</b>.</div>`));
+      return;
+    }
+
+    const grid = $(`<div class="tiles"></div>`);
+    for (const e of eps) {
+      const s = epStatus(e);
+      const lagPct = Math.min(((e.lag_ms ?? 0) / LAG_THRESHOLD) * 100, 100);
+      const barFill = !e.reachable
+        ? `background:repeating-linear-gradient(45deg,var(--red),var(--red) 4px,var(--track) 4px,var(--track) 8px)`
+        : `width:${lagPct}%;background:${s === 'degraded' ? 'var(--yellow)' : 'var(--blue)'}`;
+      const chips = e.attached_apps.length
+        ? e.attached_apps.map((a) => `<span class="tag">${esc(a)}</span>`).join(' ')
+        : `<span class="muted mono">— no instances attached —</span>`;
+      const tile = $(`<div class="tile">
+        <div class="band ${s}">
+          <span class="left">${glyph(s)} ${epLabel(s)}</span>
+          <span>${e.reachable ? (e.lag_ms != null ? e.lag_ms + 'ms' : '') : 'timeout'}</span>
+        </div>
+        <div class="body">
+          <div class="tname">${esc(e.name)} <span class="tag" style="font-size:10px">${esc(e.kind)}</span></div>
+          <div class="meta">${esc(e.url)}</div>
+          <div style="height:8px;background:var(--track);margin:6px 0"><div style="height:100%;${barFill}"></div></div>
+          <div class="tfoot"><span>ATTACHED · ${e.attached_apps.length} APPS</span><span class="rm" style="cursor:pointer">✕</span></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">${chips}</div>
+        </div>
+      </div>`);
+      tile.querySelector('.rm').onclick = () => remove(e.name);
+      grid.append(tile);
+    }
+    app.append(grid);
+  }
+
+  render();
+  timer = setInterval(render, 4000);
+  return () => clearInterval(timer);
+}
+
 // ---- Placeholder views (screens that land with their backend feature) ----
 function placeholderView(title, sub) {
   app.innerHTML = '';
@@ -301,7 +390,7 @@ function route() {
   setActiveNav(h);
   if (h.startsWith('#/app/')) return setView(() => detailView(decodeURIComponent(h.slice(6))));
   switch (h) {
-    case '#/endpoints': return setView(() => placeholderView('ENDPOINTS', 'The named Nockchain RPC registry lands with the endpoint-registry backend (DESIGN §11). Today an app carries a single endpoint string.'));
+    case '#/endpoints': return setView(endpointsView);
     case '#/secrets': return setView(() => placeholderView('SECRETS', 'Metadata-only secrets management lands with the encrypted secrets store (DESIGN OQ5). Values are never rendered.'));
     case '#/verify': return setView(() => placeholderView('VERIFY', 'Reproducible-build verification lands with signed attestations (DESIGN OQ2 / strict-both).'));
     default: return setView(fleetView);

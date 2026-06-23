@@ -172,6 +172,42 @@ async fn main() -> Result<()> {
             tui::run(&cli.host, cli.port).await?;
         }
 
+        Commands::Endpoint { action } => {
+            let client = Client::new(&cli.host, cli.port);
+            match action {
+                cli::EndpointAction::Add { name, url, kind } => {
+                    client.add_endpoint(&name, &url, &kind).await?;
+                    println!("added endpoint {name} → {url}");
+                }
+                cli::EndpointAction::Remove { name } => {
+                    client.remove_endpoint(&name).await?;
+                    println!("removed endpoint {name}");
+                }
+                cli::EndpointAction::List => {
+                    let eps = client.endpoints().await?;
+                    let arr = eps.as_array().cloned().unwrap_or_default();
+                    if arr.is_empty() {
+                        println!("no endpoints registered");
+                    } else {
+                        println!("{:<16} {:<10} {:<32} {:<10} {}", "NAME", "REACH", "URL", "LAG", "APPS");
+                        for e in arr {
+                            let reach = if e["reachable"].as_bool().unwrap_or(false) { "ok" } else { "down" };
+                            let lag = e["lag_ms"].as_u64().map(|l| format!("{l}ms")).unwrap_or_else(|| "—".into());
+                            let apps = e["attached_apps"].as_array().map(|a| a.len()).unwrap_or(0);
+                            println!(
+                                "{:<16} {:<10} {:<32} {:<10} {}",
+                                e["name"].as_str().unwrap_or(""),
+                                reach,
+                                e["url"].as_str().unwrap_or(""),
+                                lag,
+                                apps,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
         Commands::Logs { name, lines } => {
             let client = Client::new(&cli.host, cli.port);
             print!("{}", client.logs(&name, lines).await?);

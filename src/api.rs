@@ -86,6 +86,11 @@ pub fn router(daemon: Arc<Daemon>) -> Router {
         .route("/api/v1/apps/:name/stop", post(stop))
         .route("/api/v1/apps/:name/start", post(start))
         .route("/api/v1/events", get(apiv1::events_sse)) // SSE (follow)
+        .route(
+            "/api/v1/endpoints",
+            get(apiv1::list_endpoints).post(apiv1::add_endpoint),
+        )
+        .route("/api/v1/endpoints/:name", axum::routing::delete(apiv1::remove_endpoint))
         // Embedded dashboard assets + SPA fallback (DESIGN §9.2).
         .fallback(crate::dashboard::static_handler)
         // Artifact uploads (binary + kernel, base64) blow past axum's 2 MB default. Allow

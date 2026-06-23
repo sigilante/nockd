@@ -69,4 +69,37 @@ impl Client {
         Self::check(resp).await?;
         Ok(())
     }
+
+    pub async fn endpoints(&self) -> Result<serde_json::Value> {
+        let resp = self
+            .http
+            .get(format!("{}/api/v1/endpoints", self.base))
+            .send()
+            .await
+            .context("connecting to daemon")?;
+        Ok(Self::check(resp).await?.json().await?)
+    }
+
+    pub async fn add_endpoint(&self, name: &str, url: &str, kind: &str) -> Result<()> {
+        let resp = self
+            .http
+            .post(format!("{}/api/v1/endpoints", self.base))
+            .json(&serde_json::json!({ "name": name, "url": url, "kind": kind }))
+            .send()
+            .await
+            .context("connecting to daemon")?;
+        Self::check(resp).await?;
+        Ok(())
+    }
+
+    pub async fn remove_endpoint(&self, name: &str) -> Result<()> {
+        let resp = self
+            .http
+            .delete(format!("{}/api/v1/endpoints/{name}", self.base))
+            .send()
+            .await
+            .context("connecting to daemon")?;
+        Self::check(resp).await?;
+        Ok(())
+    }
 }

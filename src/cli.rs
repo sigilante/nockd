@@ -82,6 +82,12 @@ pub enum Commands {
     #[command(alias = "top")]
     Dash,
 
+    /// Manage named Nockchain RPC endpoints.
+    Endpoint {
+        #[command(subcommand)]
+        action: EndpointAction,
+    },
+
     /// Show an app's recent logs.
     Logs {
         name: String,
@@ -97,4 +103,23 @@ pub enum Commands {
 
     /// Start a stopped app.
     Start { name: String },
+}
+
+#[derive(Subcommand)]
+pub enum EndpointAction {
+    /// Register (or update) a named endpoint.
+    Add {
+        name: String,
+        /// Public-gRPC URL, e.g. http://host:5555.
+        url: String,
+        /// remote | local-socket.
+        #[arg(long, default_value = "remote")]
+        kind: String,
+    },
+    /// List endpoints with reachability.
+    #[command(alias = "ls")]
+    List,
+    /// Remove an endpoint.
+    #[command(alias = "rm")]
+    Remove { name: String },
 }

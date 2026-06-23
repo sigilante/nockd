@@ -207,6 +207,80 @@ pub async fn events_sse(State(d): State<Arc<Daemon>>) -> impl IntoResponse {
     Sse::new(stream).keep_alive(KeepAlive::default())
 }
 
+// ---- Endpoints (named Nockchain RPC targets) ----
+
+#[derive(Serialize)]
+pub struct EndpointV1 {
+    pub name: String,
+    pub url: String,
+    pub kind: String,
+    pub reachable: bool,
+    pub lag_ms: Option<u64>,
+    pub attached_apps: Vec<String>,
+}
+
+#[derive(serde::Deserialize)]
+pub struct NewEndpoint {
+    pub name: String,
+    pub url: String,
+    #[serde(default = "default_kind")]
+    pub kind: String,
+}
+
+fn default_kind() -> String {
+    "remote".to_string()
+}
+
+pub async fn list_endpoints(State(d): State<Arc<Daemon>>) -> impl IntoResponse {
+    let endpoints = match d.registry.list_endpoints() {
+        Ok(e) => e,
+        Err(e) => return crate::api::ApiError::from(e).into_response(),
+    };
+    let apps = d.registry.list_apps().unwrap_or_default();
+    let mut out = Vec::with_capacity(endpoints.len());
+    for ep in endpoints {
+        let (reachable, lag_ms) = if ep.kind == "remote" {
+            crate::health::probe_endpoint(&ep.url).await
+        } else {
+            (std::path::Path::new(&ep.url).exists(), None)
+        };
+        let attached_apps = apps
+            .iter()
+            .filter(|a| a.endpoint.as_deref() == Some(ep.name.as_str()))
+            .map(|a| a.name.clone())
+            .collect();
+        out.push(EndpointV1 {
+            name: ep.name,
+            url: ep.url,
+            kind: ep.kind,
+            reachable,
+            lag_ms,
+            attached_apps,
+        });
+    }
+    Json(out).into_response()
+}
+
+pub async fn add_endpoint(
+    State(d): State<Arc<Daemon>>,
+    Json(req): Json<NewEndpoint>,
+) -> impl IntoResponse {
+    match d.registry.add_endpoint(&req.name, &req.url, &req.kind) {
+        Ok(()) => Json(serde_json::json!({"ok": true})).into_response(),
+        Err(e) => crate::api::ApiError::from(e).into_response(),
+    }
+}
+
+pub async fn remove_endpoint(
+    State(d): State<Arc<Daemon>>,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    match d.registry.remove_endpoint(&name) {
+        Ok(_) => Json(serde_json::json!({"ok": true})).into_response(),
+        Err(e) => crate::api::ApiError::from(e).into_response(),
+    }
+}
+
 #[derive(Serialize)]
 struct EventJson {
     id: i64,

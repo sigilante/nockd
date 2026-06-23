@@ -45,6 +45,14 @@ pub struct EventRow {
     pub detail: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct EndpointRow {
+    pub name: String,
+    pub url: String,
+    pub kind: String,
+    pub created_at: i64,
+}
+
 impl Registry {
     pub fn open(path: &std::path::Path) -> Result<Self> {
         let conn = Connection::open(path).context("opening sqlite registry")?;
@@ -78,6 +86,12 @@ impl Registry {
                 app_name TEXT NOT NULL,
                 kind     TEXT NOT NULL,
                 detail   TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS endpoint (
+                name       TEXT PRIMARY KEY,
+                url        TEXT NOT NULL,
+                kind       TEXT NOT NULL,          -- remote | local-socket
+                created_at INTEGER NOT NULL
             );
             "#,
         )
@@ -243,5 +257,35 @@ impl Registry {
             kind: row.get(3)?,
             detail: row.get(4)?,
         })
+    }
+
+    pub fn add_endpoint(&self, name: &str, url: &str, kind: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO endpoint (name, url, kind, created_at) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(name) DO UPDATE SET url=?2, kind=?3",
+            rusqlite::params![name, url, kind, now_secs()],
+        )?;
+        Ok(())
+    }
+
+    pub fn remove_endpoint(&self, name: &str) -> Result<usize> {
+        let conn = self.conn.lock().unwrap();
+        Ok(conn.execute("DELETE FROM endpoint WHERE name=?1", [name])?)
+    }
+
+    pub fn list_endpoints(&self) -> Result<Vec<EndpointRow>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare("SELECT name, url, kind, created_at FROM endpoint ORDER BY name")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(EndpointRow {
+                name: row.get(0)?,
+                url: row.get(1)?,
+                kind: row.get(2)?,
+                created_at: row.get(3)?,
+            })
+        })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
     }
 }

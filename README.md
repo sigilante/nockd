@@ -93,6 +93,20 @@ cmd   = "grep -oE 'block_height=[0-9]+' | tail -1 | grep -oE '[0-9]+'"
 nockd deploy -f nockd.toml
 ```
 
+### Endpoints
+
+Named Nockchain RPC targets, with live reachability + lag. Apps reference an endpoint by
+name (the `endpoint` field), so the URL can change without redeploying.
+
+```sh
+nockd endpoint add mainnet-rpc http://<host>:5555
+nockd endpoint ls                 # NAME · REACH · URL · LAG · APPS
+nockd endpoint rm mainnet-rpc
+```
+
+They're also managed from the dashboard's **ENDPOINTS** screen (add / remove / live
+reachability tiles).
+
 `nockchain-wallet` is **not** a fit: it's a one-shot command tool (pokes once, exits), not
 a long-lived service to supervise.
 
