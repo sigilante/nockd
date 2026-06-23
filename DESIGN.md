@@ -132,7 +132,7 @@ heavy. So the default deploy is "small process + remote RPC URL," not "provision
 
 | Term | Meaning |
 |---|---|
-| **Artifact** | An immutable, content-addressed bundle: the Rust wrapper binary, the `out.jam` kernel, and a provenance manifest (source manifest, `hoonc` version, toolchain pin, build host). Identified by `blake3:<hex>`. |
+| **Artifact** | An immutable, content-addressed bundle: the Rust wrapper binary, the `out.jam` kernel, and a provenance manifest — including the **resolved typhoon dependency graph** (every Hoon package pinned to an exact commit; see §7.3), `hoonc` version, toolchain pin, build host. Identified by `blake3:<hex>`. |
 | **App** | A named, long-lived deployment. Has desired state: which artifact, config, secrets refs, nockchain attachment, restart policy. The unit a user reasons about. |
 | **Instance** | A running OS process supervised by `nockd` for an App. Light/stateful apps are single-instance by definition (state is local and singular). |
 | **State dir** | The persistent directory `nockd` owns for an App: jam snapshots, event log, app-written files. Never destroyed implicitly. |
@@ -408,8 +408,33 @@ the older `manifest.toml`): `[package]` metadata + `template` (+ optional `templ
 pin) + a `[dependencies]` table resolved against the **typhoon** Hoon package registry
 (e.g. `"urbit/bits" = "@k409"`, `"nockchain/zose" = "latest"`; version specs `@kelvin`,
 `^semver`, `@tag:…`, `latest`). `nockd` reads this but does not own it, and does not
-resolve packages — that is Nockup's job (build/run split, principle 7). See §13 OQ10 for
-how nockd relates to the existing/planned registries.
+resolve packages — that is Nockup's job (build/run split, principle 7).
+
+### 7.3 typhoon as a source of truth (not just a thing nockd reads past)
+
+**typhoon is load-bearing for `nockd`, not peripheral.** Nockup's `Resolver` turns
+`nockapp.toml`'s `[dependencies]` into a `ResolvedGraph` of `ResolvedPackage`s — each pinned
+to an **exact commit** (`source_url`, `commit`, `source_path`, `files`, transitive deps), in
+topological install order, fetched from the typhoon registry (`registry.toml`) with caching.
+That resolved graph is the **provenance of the Hoon half of an artifact**: it is the precise
+answer to "what source produced this `out.jam`." `nockd` depends on typhoon in three ways:
+
+1. **Provenance / reproducibility (the big one).** Strict verification (§G5, OQ2) is only
+   exact if the kernel's *inputs* are pinned. The resolved typhoon graph is exactly that
+   pin, and it must be embedded in the artifact provenance and the signed attestation. Open
+   gap: **there is no on-disk lockfile today** (resolution is in-memory at install). `nockd`
+   either consumes a `nockapp.lock`-style file or captures the `ResolvedGraph` itself at
+   build time — and should push for a canonical lockfile upstream.
+2. **Naming + version grammar.** `nockd` adopts typhoon's identifiers and version specs
+   (`@kelvin`, `^semver`, `@tag:…`, `@commit:…`, branch, `latest`) rather than inventing a
+   parallel scheme. Kelvin in particular is the canonical *compatibility* signal (relevant
+   to molt/toolchain compat, §5.4).
+3. **Registry substrate to extend.** `nockd`'s future artifact registry (OQ10) is the
+   deployment-layer *sibling* of typhoon — same TOML-registry model, same version grammar,
+   same online-fetch+cache, ideally the same namespace and PKI (OQ11) — not a separate
+   invention.
+
+See §13 OQ10/OQ11.
 
 ### 7.2 Deploy manifest (runtime — new, owned by `nockd`)
 
@@ -660,7 +685,11 @@ secrets backend (stub with a file ref), heavy tier.
   (a) make the Rust binary actually reproducible — kill the template `build.rs`
   timestamp/`FULL_VERSION` embedding, add `--remap-path-prefix`, strip, `--locked`, pin
   per-target; (b) the build-site attestation + signature format; (c) **empirically confirm**
-  with a two-machine double-build of `blackjack` before claiming it publicly.
+  with a two-machine double-build of `blackjack` before claiming it publicly; (d) **pin the
+  Hoon inputs** — embed the resolved typhoon dependency graph (exact commits, §7.3) in the
+  provenance/attestation, since "reproducible from pinned source" is meaningless without it.
+  Upstream gap: no `nockapp.lock` exists yet, so `nockd` captures the `ResolvedGraph` at
+  build time (and should advocate a canonical lockfile upstream).
 - **OQ3 — Health semantics. RESOLVED (§5.3, §8.2).** Four distinct signals, never
   conflated: (1) process liveness (supervisor); (2) app readiness = gRPC health `SERVING` +
   `Ping` — *this is the deploy gate*; (3) optional app-semantic `Peek` of a manifest path;
@@ -717,6 +746,13 @@ secrets backend (stub with a file ref), heavy tier.
   **same primitive**. Decide whether `nockd`'s attestation-signing identity is designed to
   *be* (or bootstrap) that PKI, so an artifact registry (OQ10) and a future upstream
   publish/namespace can share one trust root rather than inventing two.
+  **DECIDED: design-for-it, build-later.** Phases 0–2 stay a deployment engine, but the
+  attestation-signing identity (OQ2) is designed from the start to serve as the PKI / trust
+  root that a phase-3 artifact registry (OQ10) and any future upstream publish/namespace can
+  share. No registry is built early; no door is closed. Concretely: signed attestations
+  carry a stable publisher identity + key, with room for namespacing, even in phase 1. The
+  artifact registry, when built, **extends typhoon** (§7.3) — its format, version grammar,
+  namespace, and ideally this same trust root — rather than standing up a parallel system.
 
 ---
 
