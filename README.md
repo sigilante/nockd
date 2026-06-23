@@ -25,21 +25,35 @@ nockd rollback myapp     # one-step rollback to the previous artifact
 Early. The authoritative design reference is **[DESIGN.md](./DESIGN.md)** — read it first;
 it is the bedrock truth this codebase follows.
 
-The **Phase 0 spine** runs: `nockd serve` supervises content-addressed artifacts with
-crash-restart and a SQLite registry, exposes an HTTP control API + a minimal browser
-dashboard, and `nockd deploy/ps/logs/restart/stop` drive it.
+What runs today: `nockd serve` supervises content-addressed artifacts with crash-restart
+and a SQLite registry, probes app health over gRPC, exposes an HTTP control API, and is
+driven by `nockd deploy/ps/logs/restart/stop` plus a live `nockd dash` TUI.
 
 ```sh
 cargo build
-nockd serve &                                  # daemon + dashboard on http://127.0.0.1:4490
+
+nockd serve &                                  # daemon on http://127.0.0.1:4490
+
+# Build with the client-side toolchain (the daemon never compiles):
+nockd deploy --project ./myapp --restart always --health-addr 127.0.0.1:5599
+
+# …or ship a prebuilt artifact:
 nockd deploy myapp --bin ./target/release/myapp --jam ./out.jam --restart always
-nockd ps
+
+nockd ps                                       # fleet + state + health
+nockd dash                                     # live TUI (↑/↓ select · r/s/x · q quit)
 nockd logs myapp
 ```
 
-Not yet wired (see DESIGN §12 / open questions): client-side `nockup` build, gRPC health
-gate, molt upgrades, secrets, Unix-socket control transport, auth. Phase 0 deploy takes a
-**prebuilt** binary + kernel.
+- **Build/run split (principle 7):** `--project` shells out to `nockup`; the daemon only
+  runs artifacts and needs no toolchain.
+- **Health (DESIGN §5.3, OQ3):** with `--health-addr`, nockd probes the app's private gRPC
+  health and surfaces `serving`/`unreachable`. The *swap-gate* form (block/rollback on
+  unhealthy upgrades) lands with molt in Phase 2.
+
+Not yet wired (DESIGN §12 / open questions): molt upgrades, secrets, signed
+attestations, Unix-socket control transport, auth. The web dashboard is incoming
+separately; `nockd dash` is the interim.
 
 ## License
 

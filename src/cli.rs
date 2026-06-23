@@ -32,20 +32,28 @@ pub enum Commands {
         bind: String,
     },
 
-    /// Build (TODO) + ship a NockApp artifact and run it. Phase 0 takes a prebuilt
-    /// binary + kernel; client-side `nockup` build is a later step (principle 7).
+    /// Build (via `nockup`) and/or ship a NockApp artifact and run it.
+    ///
+    /// Two modes: `--project <dir>` builds with the client-side toolchain (principle 7),
+    /// or `--bin`/`--jam` ship a prebuilt artifact. The daemon never compiles.
     Deploy {
-        /// App name.
-        name: String,
-        /// Path to the built Rust wrapper binary.
+        /// App name (required for prebuilt mode; inferred from the manifest with --project).
+        name: Option<String>,
+        /// Project directory to build with `nockup`.
         #[arg(long)]
-        bin: PathBuf,
-        /// Path to the compiled kernel (`out.jam`).
+        project: Option<PathBuf>,
+        /// Path to a prebuilt Rust wrapper binary.
         #[arg(long)]
-        jam: PathBuf,
+        bin: Option<PathBuf>,
+        /// Path to a prebuilt kernel (`out.jam`).
+        #[arg(long)]
+        jam: Option<PathBuf>,
         /// Nockchain public-gRPC endpoint URL (http://host:port).
         #[arg(long)]
         endpoint: Option<String>,
+        /// App's private/admin gRPC address for the health gate (host:port).
+        #[arg(long)]
+        health_addr: Option<String>,
         /// Restart policy: always | on-failure | never.
         #[arg(long, default_value = "on-failure")]
         restart: String,
@@ -59,6 +67,10 @@ pub enum Commands {
 
     /// List deployed apps and their status.
     Ps,
+
+    /// Live TUI dashboard of the fleet.
+    #[command(alias = "top")]
+    Dash,
 
     /// Show an app's recent logs.
     Logs {

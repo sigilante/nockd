@@ -26,6 +26,8 @@ pub struct AppRow {
     pub args: Vec<String>,
     pub state_path: String,
     pub desired_status: String, // "running" | "stopped"
+    /// App's private/admin gRPC address for health probing (DESIGN §5.3).
+    pub admin_addr: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -60,6 +62,7 @@ impl Registry {
                 args           TEXT NOT NULL,          -- JSON array
                 state_path     TEXT NOT NULL,
                 desired_status TEXT NOT NULL,
+                admin_addr     TEXT,
                 created_at     INTEGER NOT NULL,
                 updated_at     INTEGER NOT NULL
             );
@@ -73,6 +76,8 @@ impl Registry {
             "#,
         )
         .context("initializing schema")?;
+        // Tolerate older DBs created before admin_addr existed.
+        let _ = conn.execute("ALTER TABLE app ADD COLUMN admin_addr TEXT", []);
         Ok(Registry { conn: Mutex::new(conn) })
     }
 
@@ -93,6 +98,7 @@ impl Registry {
     }
 
     /// Insert or update an app, setting its desired status to "running".
+    #[allow(clippy::too_many_arguments)]
     pub fn upsert_app(
         &self,
         name: &str,
@@ -101,17 +107,18 @@ impl Registry {
         restart_policy: &str,
         args: &[String],
         state_path: &str,
+        admin_addr: Option<&str>,
     ) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         let now = now_secs();
         let args_json = serde_json::to_string(args)?;
         conn.execute(
-            "INSERT INTO app (name, artifact_hash, endpoint, restart_policy, args, state_path, desired_status, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'running', ?7, ?7)
+            "INSERT INTO app (name, artifact_hash, endpoint, restart_policy, args, state_path, desired_status, admin_addr, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'running', ?7, ?8, ?8)
              ON CONFLICT(name) DO UPDATE SET
                 artifact_hash=?2, endpoint=?3, restart_policy=?4, args=?5,
-                state_path=?6, desired_status='running', updated_at=?7",
-            rusqlite::params![name, artifact_hash, endpoint, restart_policy, args_json, state_path, now],
+                state_path=?6, desired_status='running', admin_addr=?7, updated_at=?8",
+            rusqlite::params![name, artifact_hash, endpoint, restart_policy, args_json, state_path, admin_addr, now],
         )?;
         Ok(())
     }
@@ -129,7 +136,7 @@ impl Registry {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT a.name, a.artifact_hash, ar.kernel_hash, a.endpoint, a.restart_policy,
-                    a.args, a.state_path, a.desired_status, a.created_at, a.updated_at
+                    a.args, a.state_path, a.desired_status, a.created_at, a.updated_at, a.admin_addr
              FROM app a LEFT JOIN artifact ar ON ar.hash = a.artifact_hash
              WHERE a.name = ?1",
         )?;
@@ -143,7 +150,7 @@ impl Registry {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT a.name, a.artifact_hash, ar.kernel_hash, a.endpoint, a.restart_policy,
-                    a.args, a.state_path, a.desired_status, a.created_at, a.updated_at
+                    a.args, a.state_path, a.desired_status, a.created_at, a.updated_at, a.admin_addr
              FROM app a LEFT JOIN artifact ar ON ar.hash = a.artifact_hash
              ORDER BY a.name",
         )?;
@@ -167,6 +174,7 @@ impl Registry {
             desired_status: row.get(7)?,
             created_at: row.get(8)?,
             updated_at: row.get(9)?,
+            admin_addr: row.get(10)?,
         })
     }
 

@@ -53,6 +53,26 @@ pub async fn serve(daemon: Arc<Daemon>, host: IpAddr, port: u16) -> Result<()> {
         }
     });
 
+    // Background health-probe loop (DESIGN §5.3/§8.2). Probes the private gRPC of any app
+    // with an admin address; apps without one keep process-liveness only.
+    let hp = daemon.clone();
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(Duration::from_secs(2));
+        loop {
+            tick.tick().await;
+            let apps = match hp.registry.list_apps() {
+                Ok(a) => a,
+                Err(_) => continue,
+            };
+            for app in apps {
+                if let Some(addr) = app.admin_addr.clone() {
+                    let state = crate::health::probe(&addr).await;
+                    hp.supervisor.set_health(&app.name, state);
+                }
+            }
+        }
+    });
+
     let app = crate::api::router(daemon.clone());
     let listener = TcpListener::bind((host, port))
         .await

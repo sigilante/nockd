@@ -18,6 +18,7 @@ use tokio::process::{Child, Command};
 use tracing::{info, warn};
 
 use crate::config::{now_secs, Paths};
+use crate::health::HealthState;
 use crate::registry::{AppRow, Registry};
 use crate::store::Store;
 
@@ -37,6 +38,7 @@ struct Managed {
     restarts: u32,
     backoff_until: i64,
     state: RunState,
+    health: HealthState,
     /// Set when an operator asked for a restart, so the reap doesn't treat the resulting
     /// exit as a crash (no backoff, no restart-count bump).
     restart_requested: bool,
@@ -51,6 +53,7 @@ impl Default for Managed {
             restarts: 0,
             backoff_until: 0,
             state: RunState::Stopped,
+            health: HealthState::Unknown,
             restart_requested: false,
         }
     }
@@ -62,6 +65,7 @@ pub struct RuntimeStatus {
     pub pid: Option<u32>,
     pub started_at: i64,
     pub restarts: u32,
+    pub health: HealthState,
 }
 
 pub struct Supervisor {
@@ -86,7 +90,16 @@ impl Supervisor {
             pid: m.pid,
             started_at: m.started_at,
             restarts: m.restarts,
+            health: m.health,
         })
+    }
+
+    /// Record the latest health probe result (called by the daemon's probe loop).
+    pub fn set_health(&self, name: &str, health: HealthState) {
+        let mut procs = self.procs.lock().unwrap();
+        if let Some(m) = procs.get_mut(name) {
+            m.health = health;
+        }
     }
 
     /// Force an immediate restart: kill the child and clear backoff.
@@ -160,6 +173,7 @@ impl Supervisor {
                 entry.child = None;
                 entry.pid = None;
                 entry.state = RunState::Stopped;
+                entry.health = HealthState::Unknown;
                 continue;
             }
 
@@ -184,6 +198,7 @@ impl Supervisor {
                     entry.child = Some(child);
                     entry.started_at = now_secs();
                     entry.state = RunState::Running;
+                    entry.health = HealthState::Unknown;
                     info!(app = %app.name, pid = ?entry.pid, "instance started");
                     let _ = registry.add_event(&app.name, "start", "instance started");
                 }

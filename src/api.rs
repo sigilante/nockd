@@ -29,6 +29,9 @@ pub struct DeployRequest {
     pub restart: String,
     #[serde(default)]
     pub args: Vec<String>,
+    /// App's private/admin gRPC address for health probing (DESIGN §5.3).
+    #[serde(default)]
+    pub admin_addr: Option<String>,
     #[serde(default)]
     pub provenance: Option<String>,
 }
@@ -111,6 +114,7 @@ async fn deploy(
         &req.restart,
         &req.args,
         &state_path.to_string_lossy(),
+        req.admin_addr.as_deref(),
     )?;
     d.registry.add_event(
         &req.name,

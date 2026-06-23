@@ -2,14 +2,17 @@
 //! See DESIGN.md for the authoritative architecture.
 
 mod api;
+mod buildkit;
 mod cli;
 mod client;
 mod config;
 mod daemon;
 mod dashboard;
+mod health;
 mod registry;
 mod store;
 mod supervisor;
+mod tui;
 
 use std::net::IpAddr;
 
@@ -41,17 +44,30 @@ async fn main() -> Result<()> {
 
         Commands::Deploy {
             name,
+            project,
             bin,
             jam,
             endpoint,
+            health_addr,
             restart,
             target,
             args,
         } => {
-            let bin_bytes = std::fs::read(&bin)
-                .with_context(|| format!("reading binary {}", bin.display()))?;
-            let jam_bytes = std::fs::read(&jam)
-                .with_context(|| format!("reading kernel {}", jam.display()))?;
+            let (name, bin_path, jam_path, provenance) = if let Some(proj) = project {
+                let built = buildkit::build_project(&proj)?;
+                let name = name.unwrap_or(built.name);
+                (name, built.bin, built.jam, Some(built.provenance))
+            } else {
+                let name = name.context("app name required (or pass --project <dir>)")?;
+                let bin = bin.context("--bin required when not using --project")?;
+                let jam = jam.context("--jam required when not using --project")?;
+                (name, bin, jam, None)
+            };
+
+            let bin_bytes = std::fs::read(&bin_path)
+                .with_context(|| format!("reading binary {}", bin_path.display()))?;
+            let jam_bytes = std::fs::read(&jam_path)
+                .with_context(|| format!("reading kernel {}", jam_path.display()))?;
             let engine = base64::engine::general_purpose::STANDARD;
             let req = api::DeployRequest {
                 name: name.clone(),
@@ -61,7 +77,8 @@ async fn main() -> Result<()> {
                 endpoint,
                 restart,
                 args,
-                provenance: None,
+                admin_addr: health_addr,
+                provenance,
             };
             let client = Client::new(&cli.host, cli.port);
             let resp = client.deploy(&req).await?;
@@ -78,25 +95,34 @@ async fn main() -> Result<()> {
                 println!("no apps deployed");
                 return Ok(());
             }
-            println!("{:<16} {:<10} {:<14} {:<8} {}", "NAME", "STATE", "KERNEL", "PID", "ENDPOINT");
+            println!(
+                "{:<16} {:<10} {:<12} {:<14} {:<8} {}",
+                "NAME", "STATE", "HEALTH", "KERNEL", "PID", "ENDPOINT"
+            );
             for a in apps {
-                let (state, pid) = match &a.runtime {
+                let (state, health, pid) = match &a.runtime {
                     Some(rt) => (
                         format!("{:?}", rt.state).to_lowercase(),
+                        format!("{:?}", rt.health).to_lowercase(),
                         rt.pid.map(|p| p.to_string()).unwrap_or_else(|| "—".into()),
                     ),
-                    None => (a.desired_status.clone(), "—".into()),
+                    None => (a.desired_status.clone(), "unknown".into(), "—".into()),
                 };
                 let kernel = a.kernel_hash.chars().take(12).collect::<String>();
                 println!(
-                    "{:<16} {:<10} {:<14} {:<8} {}",
+                    "{:<16} {:<10} {:<12} {:<14} {:<8} {}",
                     a.name,
                     state,
+                    health,
                     kernel,
                     pid,
                     a.endpoint.unwrap_or_else(|| "—".into())
                 );
             }
+        }
+
+        Commands::Dash => {
+            tui::run(&cli.host, cli.port).await?;
         }
 
         Commands::Logs { name, lines } => {

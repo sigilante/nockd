@@ -60,13 +60,16 @@ pub fn now_secs() -> i64 {
 }
 
 /// The deploy manifest (`nockd.toml`) — runtime config owned by nockd (DESIGN §7.2).
-/// Phase 0 supports a subset; secrets/admin_addr/state-backup land in later phases.
+/// Defined ahead of use: `nockd deploy` currently takes flags; reading `nockd.toml` is the
+/// next wire-up.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct DeployManifest {
     pub deploy: DeploySection,
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 pub struct DeploySection {
     pub app: String,
     #[serde(default = "default_restart")]
@@ -78,6 +81,7 @@ pub struct DeploySection {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 pub struct NockchainSection {
     /// A public-gRPC endpoint URL `http://host:port` (DESIGN §5.3).
     pub endpoint: Option<String>,
@@ -87,6 +91,7 @@ fn default_restart() -> String {
     "on-failure".to_string()
 }
 
+#[allow(dead_code)]
 impl DeployManifest {
     pub fn load(path: &std::path::Path) -> Result<Self> {
         let text = std::fs::read_to_string(path)
