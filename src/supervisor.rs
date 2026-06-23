@@ -143,6 +143,7 @@ impl Supervisor {
             if let Some(pid) = m.pid {
                 m.restart_requested = true;
                 m.term_deadline = Some(now_secs() + GRACE_SECS);
+                info!(app = %name, pid, "restart requested → sending SIGTERM");
                 send_term(pid);
             }
             m.backoff_until = 0;
@@ -221,6 +222,7 @@ impl Supervisor {
             if !desired_names.contains(name.as_str()) {
                 if let Some(m) = procs.remove(&name) {
                     if let Some(pid) = m.pid {
+                        info!(app = %name, pid, "app removed from registry → SIGKILL");
                         send_kill(pid);
                     }
                     let _ = std::fs::remove_file(self.paths.pid_file(&name));
@@ -239,6 +241,7 @@ impl Supervisor {
                     // Begin a graceful stop once; reap/escalation drives it to completion.
                     if entry.term_deadline.is_none() {
                         if let Some(pid) = entry.pid {
+                            info!(app = %app.name, pid, "desired=stopped → sending SIGTERM");
                             send_term(pid);
                         }
                         entry.term_deadline = Some(now_secs() + GRACE_SECS);

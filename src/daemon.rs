@@ -2,10 +2,11 @@
 //! loop plus the HTTP control API + dashboard (DESIGN §5).
 
 use std::net::IpAddr;
+use std::os::unix::io::AsRawFd;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use tokio::net::TcpListener;
 use tracing::info;
 
@@ -19,10 +20,13 @@ pub struct Daemon {
     pub registry: Registry,
     pub store: Store,
     pub supervisor: Supervisor,
+    /// Held for the daemon's lifetime; its flock guarantees a single daemon per root (OQ7).
+    _lock: std::fs::File,
 }
 
 impl Daemon {
     pub fn new(paths: Paths) -> Result<Arc<Self>> {
+        let lock = acquire_single_daemon_lock(&paths.root.join("nockd.lock"))?;
         let registry = Registry::open(&paths.db)?;
         let store = Store::new(paths.artifacts.clone());
         let supervisor = Supervisor::new(paths.clone());
@@ -31,6 +35,7 @@ impl Daemon {
             registry,
             store,
             supervisor,
+            _lock: lock,
         }))
     }
 
@@ -40,6 +45,27 @@ impl Daemon {
             tracing::warn!(error = %e, "reconcile failed");
         }
     }
+}
+
+/// Take an exclusive, non-blocking flock so only one daemon runs per data root. A second
+/// daemon would fight the first over the same registry/state and could SIGTERM its apps.
+fn acquire_single_daemon_lock(path: &std::path::Path) -> Result<std::fs::File> {
+    let f = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(false)
+        .open(path)
+        .with_context(|| format!("opening lock {}", path.display()))?;
+    // Safety: flock on a valid fd. LOCK_NB so we fail fast instead of blocking.
+    let rc = unsafe { libc::flock(f.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+    if rc != 0 {
+        bail!(
+            "another nockd is already running for this data root (lock held: {}). \
+             Stop it first, or use a different --root.",
+            path.display()
+        );
+    }
+    Ok(f)
 }
 
 /// Read up to the last `max_bytes` of a file as lossy UTF-8 (cheap tail for large logs).
