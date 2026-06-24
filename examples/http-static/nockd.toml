@@ -12,6 +12,10 @@ app     = "http-static"
 project = "."
 restart = "always"
 
+# HTTP port, declared once. nockd exports it as NOCKD_APP_PORT (main.rs bridges it to the
+# driver's HTTP_PORT) and the dashboard shows an "Open app ↗" relay link to localhost:<port>.
+port    = 8083
+
 # Status metric: nockd runs this every few seconds with the ANSI- and NUL-stripped recent log
 # on stdin and cwd = the app's state dir. The kernel logs `metric: requests=<N>` on EVERY
 # request, so the most recent value is always available to grep, surfacing the live request
