@@ -64,6 +64,9 @@ const metricStr = (a) => (a.status_line ? `${a.status_label ? a.status_label + '
 const vfy = (v) => v === 'verified' ? `<span class="vfy ok">✓ verified</span>`
   : v === 'drift' ? `<span class="vfy bad">▼ drift</span>`
   : `<span class="vfy muted">unverified</span>`;
+// An HTTP app's "open app" link, derived from its declared port + the host you're viewing
+// nockd on (never a stored URL). null if the app serves no port.
+const appLink = (a) => (a.port ? `${location.protocol}//${location.hostname}:${a.port}/` : null);
 
 function fmtUptime(s) {
   if (s == null) return '—';
@@ -149,7 +152,7 @@ function fleetView() {
       const rst = a.restart_count > 3 ? `<span class="rst-hot">${a.restart_count}</span>` : a.restart_count;
       const tr = $(`<tr class="${idle ? 'idle' : ''}">
         <td>${glyph(a.status)}</td>
-        <td class="cell-app">${esc(a.name)}${a.link ? ` <a class="relay-mini" href="${esc(a.link)}" target="_blank" rel="noopener" title="Open ${esc(a.link)}">↗</a>` : ''}</td>
+        <td class="cell-app">${esc(a.name)}${appLink(a) ? ` <a class="relay-mini" href="${esc(appLink(a))}" target="_blank" rel="noopener" title="Open ${esc(appLink(a))}">↗</a>` : ''}</td>
         <td class="mono">${shortHash(a.artifact_hash)}</td>
         <td class="mono">${esc(a.endpoint_name || '—')}</td>
         <td class="mono">${fmtUptime(a.uptime_s)}</td>
@@ -213,7 +216,7 @@ function detailView(name) {
         <h1>${esc(a.name)}</h1>
         <span class="sub">${esc(a.restart_policy)} · up ${fmtUptime(a.uptime_s)} · pid ${a.pid ?? '—'}${a.status_line ? ' · ' + esc(metricStr(a)) : ''}</span>
         <div class="actions">
-          ${a.link ? `<a class="btn relay" href="${esc(a.link)}" target="_blank" rel="noopener" title="Open ${esc(a.link)}">Open app ↗</a>` : ''}
+          ${appLink(a) ? `<a class="btn relay" href="${esc(appLink(a))}" target="_blank" rel="noopener" title="Open ${esc(appLink(a))}">Open app ↗</a>` : ''}
           <button class="btn" data-act="restart">Restart</button>
           <button class="btn" data-act="start">Start</button>
           <button class="btn danger" data-act="stop">Stop</button>
@@ -242,7 +245,7 @@ function detailView(name) {
           <h3>Attachment</h3>
           <div class="kv" style="color:var(--cream)"><span class="k" style="color:rgba(243,237,225,.7)">endpoint</span> ${esc(a.endpoint_name || '— none —')}</div>
           <div class="kv" style="color:var(--cream)"><span class="k" style="color:rgba(243,237,225,.7)">health</span> ${esc(a.health)}</div>
-          <div class="kv" style="color:var(--cream)"><span class="k" style="color:rgba(243,237,225,.7)">page</span> ${a.link ? `<a class="relay-inline" href="${esc(a.link)}" target="_blank" rel="noopener">${esc(a.link)} ↗</a>` : '— none —'}</div>
+          <div class="kv" style="color:var(--cream)"><span class="k" style="color:rgba(243,237,225,.7)">page</span> ${appLink(a) ? `<a class="relay-inline" href="${esc(appLink(a))}" target="_blank" rel="noopener">${esc(appLink(a))} ↗</a>` : '— none —'}</div>
         </div>
         <div class="panel"><h3>Resources</h3><div class="kv muted">CPU / RSS sampling lands with metrics (DESIGN OQ8).</div></div>
       </div>

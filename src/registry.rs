@@ -32,10 +32,10 @@ pub struct AppRow {
     /// app's custom status line (e.g. block height for a nockchain observer).
     pub status_cmd: Option<String>,
     pub status_label: Option<String>,
-    /// The app's own web page (e.g. `http://127.0.0.1:8085` for an HTTP NockApp). nockd does
-    /// not infer this — the app binds its own port internally — so the deploy declares it, and
-    /// the dashboard surfaces it as a "open app" relay link.
-    pub link: Option<String>,
+    /// The port an HTTP NockApp serves on. nockd exports it as `NOCKD_PORT` and substitutes
+    /// `{port}` in args (so the app binds the port nockd declares); the dashboard derives an
+    /// "open app" relay link to `localhost:<port>`.
+    pub port: Option<u16>,
     /// Verification status of the current artifact (verified | unverified | drift).
     pub verified_status: Option<String>,
     pub created_at: i64,
@@ -89,7 +89,7 @@ impl Registry {
                 admin_addr     TEXT,
                 status_cmd     TEXT,
                 status_label   TEXT,
-                link           TEXT,
+                port           INTEGER,
                 created_at     INTEGER NOT NULL,
                 updated_at     INTEGER NOT NULL
             );
@@ -114,7 +114,7 @@ impl Registry {
             "ALTER TABLE app ADD COLUMN admin_addr TEXT",
             "ALTER TABLE app ADD COLUMN status_cmd TEXT",
             "ALTER TABLE app ADD COLUMN status_label TEXT",
-            "ALTER TABLE app ADD COLUMN link TEXT",
+            "ALTER TABLE app ADD COLUMN port INTEGER",
             "ALTER TABLE artifact ADD COLUMN verified_status TEXT",
             "ALTER TABLE artifact ADD COLUMN builder TEXT",
         ] {
@@ -152,19 +152,19 @@ impl Registry {
         admin_addr: Option<&str>,
         status_cmd: Option<&str>,
         status_label: Option<&str>,
-        link: Option<&str>,
+        port: Option<u16>,
     ) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         let now = now_secs();
         let args_json = serde_json::to_string(args)?;
         conn.execute(
-            "INSERT INTO app (name, artifact_hash, endpoint, restart_policy, args, state_path, desired_status, admin_addr, status_cmd, status_label, link, created_at, updated_at)
+            "INSERT INTO app (name, artifact_hash, endpoint, restart_policy, args, state_path, desired_status, admin_addr, status_cmd, status_label, port, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'running', ?7, ?8, ?9, ?11, ?10, ?10)
              ON CONFLICT(name) DO UPDATE SET
                 artifact_hash=?2, endpoint=?3, restart_policy=?4, args=?5,
                 state_path=?6, desired_status='running', admin_addr=?7,
-                status_cmd=?8, status_label=?9, link=?11, updated_at=?10",
-            rusqlite::params![name, artifact_hash, endpoint, restart_policy, args_json, state_path, admin_addr, status_cmd, status_label, now, link],
+                status_cmd=?8, status_label=?9, port=?11, updated_at=?10",
+            rusqlite::params![name, artifact_hash, endpoint, restart_policy, args_json, state_path, admin_addr, status_cmd, status_label, now, port],
         )?;
         Ok(())
     }
@@ -182,7 +182,7 @@ impl Registry {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT a.name, a.artifact_hash, ar.kernel_hash, a.endpoint, a.restart_policy,
-                    a.args, a.state_path, a.desired_status, a.created_at, a.updated_at, a.admin_addr, a.status_cmd, a.status_label, ar.verified_status, a.link
+                    a.args, a.state_path, a.desired_status, a.created_at, a.updated_at, a.admin_addr, a.status_cmd, a.status_label, ar.verified_status, a.port
              FROM app a LEFT JOIN artifact ar ON ar.hash = a.artifact_hash
              WHERE a.name = ?1",
         )?;
@@ -196,7 +196,7 @@ impl Registry {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT a.name, a.artifact_hash, ar.kernel_hash, a.endpoint, a.restart_policy,
-                    a.args, a.state_path, a.desired_status, a.created_at, a.updated_at, a.admin_addr, a.status_cmd, a.status_label, ar.verified_status, a.link
+                    a.args, a.state_path, a.desired_status, a.created_at, a.updated_at, a.admin_addr, a.status_cmd, a.status_label, ar.verified_status, a.port
              FROM app a LEFT JOIN artifact ar ON ar.hash = a.artifact_hash
              ORDER BY a.name",
         )?;
@@ -224,7 +224,7 @@ impl Registry {
             status_cmd: row.get(11)?,
             status_label: row.get(12)?,
             verified_status: row.get(13)?,
-            link: row.get(14)?,
+            port: row.get(14)?,
         })
     }
 

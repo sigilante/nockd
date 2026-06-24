@@ -314,9 +314,10 @@ impl Supervisor {
     }
 
     /// Spawn one instance: stage the kernel into the state dir, run the binary there with
-    /// stdout/stderr captured to the app's log file. The `{endpoint}` placeholder in args is
-    /// substituted with the resolved endpoint URL, which is also exported as
-    /// `NOCKD_ENDPOINT_URL` for apps that read config from the environment.
+    /// stdout/stderr captured to the app's log file. The `{endpoint}`/`{port}` placeholders in
+    /// args are substituted with the resolved endpoint URL / declared port, which are also
+    /// exported as `NOCKD_ENDPOINT_URL` / `NOCKD_PORT` for apps that read config from the
+    /// environment (so the port lives only in the deploy config, not hardcoded in the app).
     fn spawn(&self, app: &AppRow, endpoint_url: Option<&str>, store: &Store) -> Result<Child> {
         let state_dir = self.paths.state_dir(&app.name);
         store.stage_jam(&app.artifact_hash, &state_dir)?;
@@ -329,10 +330,21 @@ impl Supervisor {
             .with_context(|| format!("opening log {}", log_path.display()))?;
         let err = out.try_clone().context("cloning log handle")?;
 
-        let args: Vec<String> = match endpoint_url {
-            Some(url) => app.args.iter().map(|a| a.replace("{endpoint}", url)).collect(),
-            None => app.args.clone(),
-        };
+        let port_str = app.port.map(|p| p.to_string());
+        let args: Vec<String> = app
+            .args
+            .iter()
+            .map(|a| {
+                let a = match endpoint_url {
+                    Some(url) => a.replace("{endpoint}", url),
+                    None => a.clone(),
+                };
+                match &port_str {
+                    Some(p) => a.replace("{port}", p),
+                    None => a,
+                }
+            })
+            .collect();
 
         let bin = store.bin_path(&app.artifact_hash);
         let mut command = Command::new(&bin);
@@ -348,6 +360,9 @@ impl Supervisor {
             .process_group(0);
         if let Some(url) = endpoint_url {
             command.env("NOCKD_ENDPOINT_URL", url);
+        }
+        if let Some(p) = &port_str {
+            command.env("NOCKD_PORT", p);
         }
         let child = command
             .spawn()

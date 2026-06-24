@@ -58,10 +58,11 @@ pub enum Commands {
         /// Nockchain public-gRPC endpoint URL (http://host:port).
         #[arg(long)]
         endpoint: Option<String>,
-        /// The app's own web page URL (e.g. http://127.0.0.1:8085) — shown as a relay link on
-        /// the dashboard so you can open the running NockApp directly.
+        /// Port an HTTP NockApp serves on. nockd exports it as NOCKD_PORT (and substitutes
+        /// `{port}` in args) and the dashboard links to localhost:<port>. (Named --web-port to
+        /// avoid the global --port, which is the daemon's control-API port.)
         #[arg(long)]
-        link: Option<String>,
+        web_port: Option<u16>,
         /// App's private/admin gRPC address for the health gate (host:port).
         #[arg(long)]
         health_addr: Option<String>,

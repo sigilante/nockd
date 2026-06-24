@@ -40,7 +40,7 @@ pub struct AppV1 {
     pub verified: String,              // unverified (no attestation yet)
     pub status_label: Option<String>,  // e.g. "BLOCK"
     pub status_line: Option<String>,   // e.g. "height 184302" — from the status command
-    pub link: Option<String>,          // the app's own web page (relay link), if it serves one
+    pub port: Option<u16>,             // HTTP port the app serves on; dashboard links to it
     pub pid: Option<u32>,
     pub created_at: i64,
     pub updated_at: i64,
@@ -97,7 +97,7 @@ fn to_app_v1(row: AppRow, rt: Option<RuntimeStatus>) -> AppV1 {
         verified: row.verified_status.unwrap_or_else(|| "unverified".into()),
         status_label: row.status_label,
         status_line: rt.as_ref().and_then(|r| r.status_line.clone()),
-        link: row.link,
+        port: row.port,
         pid: rt.as_ref().and_then(|r| r.pid),
         created_at: row.created_at,
         updated_at: row.updated_at,

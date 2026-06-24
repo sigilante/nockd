@@ -12,9 +12,10 @@ restart = "on-failure"               # always | on-failure | never
 # args = ["--nockchain-grpc", "{endpoint}"]
 args = []
 
-# If the app serves its own web page (HTTP NockApps like common-blog / minesweeper), give the
-# URL it binds — the dashboard shows an "Open app ↗" relay link straight to it.
-# link = "http://127.0.0.1:8085"
+# HTTP NockApp? Declare the port ONCE here. nockd exports it as NOCKD_PORT (read it in your
+# app to bind — don't hardcode a port) and substitutes {port} in args, and the dashboard shows
+# an "Open app ↗" relay link to localhost:<port>.
+# port = 8085
 
 # A named Nockchain endpoint this app attaches to. Register it once:
 #   nockd endpoint add mainnet-rpc https://rpc.nockchain.net

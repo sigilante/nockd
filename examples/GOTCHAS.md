@@ -90,11 +90,17 @@ cmd   = "grep -oE 'requests=[0-9]+' | tail -1 | grep -oE '[0-9]+'"
 (NUL bytes in kernel-boot logs used to silently blank the metric on macOS — nockd strips
 them now, so the recipe above works on every platform.)
 
-### Serves a web page? Declare its URL — **[nockd feature]**
-If your app binds its own HTTP port (e.g. common-blog on `:8085`), nockd can't infer it. Set
-`link = "http://127.0.0.1:8085"` in `nockd.toml` (or `--link`) and the dashboard renders an
-**"Open app ↗"** relay link on the status page (plus a ↗ next to the name in the table) that
-opens the running NockApp directly.
+### Serves a web page? Declare the port (not a URL) — **[nockd feature]**
+Don't hardcode a port in your app. Declare it **once** in `nockd.toml` (`port = 8085`, or
+`--web-port`); nockd exports it as **`NOCKD_PORT`** (and substitutes `{port}` in args), so your
+app reads the port from the environment and binds it — single source of truth, no duplication.
+The dashboard then derives an **"Open app ↗"** relay link to `localhost:<port>` (plus a ↗ next
+to the name in the table). Example bridge for an `HTTP_PORT`-style driver:
+
+```rust
+let port = std::env::var("NOCKD_PORT").unwrap_or_else(|_| "8085".into()); // 8085 = standalone fallback
+std::env::set_var("HTTP_PORT", &port);
+```
 
 ### Reference an endpoint by name
 Chain apps take the RPC URL via an arg with the `{endpoint}` placeholder; nockd substitutes

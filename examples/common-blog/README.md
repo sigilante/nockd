@@ -64,7 +64,9 @@ nockup project build common-blog      # -> out.jam + target/release/common-blog
 Requires the pinned nightly in [`rust-toolchain.toml`](rust-toolchain.toml)
 (`nightly-2026-04-03`). The crates are pinned to nockchain rev
 `07577127958db94be12e95ea816f31bc7582aa2c`, which carries PR #134's `HTTP_PORT` override so
-the stock `http_driver()` binds `127.0.0.1:8085` directly — no proxy.
+the stock `http_driver()` binds `127.0.0.1:<port>` directly — no proxy. The port is declared
+once as `port = 8085` in `nockd.toml`; nockd exports `NOCKD_PORT` and `main.rs` bridges it to
+`HTTP_PORT` (falling back to 8085 when run standalone).
 
 ## Deploy (project mode)
 
@@ -75,8 +77,9 @@ nockd restart common-blog       # start / swap in the freshly built artifact
 nockd ps                        # common-blog: running / verified / POSTS <n>
 ```
 
-The app serves on **`http://127.0.0.1:8085`**. `nockd.toml` sets the `POSTS` status metric,
-grepped from the kernel's `metric: posts=<N>` slog line (logged on every request).
+The app serves on **`http://127.0.0.1:8085`** (the `port` from `nockd.toml`), and the
+dashboard shows an **"Open app ↗"** link to it. `nockd.toml` also sets the `POSTS` status
+metric, grepped from the kernel's `metric: posts=<N>` slog line (logged on every request).
 
 ## Use it — publish and read over HTTP
 
