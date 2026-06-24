@@ -23,7 +23,8 @@ Serves on **http://127.0.0.1:8084/**.
 ## Play
 
 Open `http://127.0.0.1:8084/` in a browser and click cells (each hidden cell has a
-`?` reveal button and an `f` flag toggle), or drive it with curl:
+🪏 reveal button and a ⛳ flag toggle; on a loss the clicked mine shows 💥 and the
+rest show 💣), or drive it with curl:
 
 ```sh
 curl http://127.0.0.1:8084/                       # render the board

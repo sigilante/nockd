@@ -147,8 +147,10 @@
   =/  xs  (scow %ud x)
   =/  ys  (scow %ud y)
   ?:  &(over is-mine)
-    ::  game over: expose all mines
-    "<td class=\"mine\">*</td>"
+    ::  game over: expose mines; the one you clicked is in `shown` -> show the blast
+    ?:  is-shown
+      "<td class=\"mine boom\">&#128165;</td>"
+    "<td class=\"mine\">&#128163;</td>"
   ?:  is-shown
     =/  n  (adjacent g x y)
     ?:  =(0 n)
@@ -158,19 +160,19 @@
     ::  flagged & still playing: show a flag button that un-flags on click
     ;:  weld
       "<td class=\"flag\"><form method=\"POST\" action=\"/flag?x={xs}&y={ys}\">"
-      "<button type=\"submit\" class=\"flagbtn\">F</button></form></td>"
+      "<button type=\"submit\" class=\"flagbtn\">&#9971;</button></form></td>"
     ==
   ?:  is-flag
-    "<td class=\"flag\">F</td>"
+    "<td class=\"flag\">&#9971;</td>"
   ?:  over
     "<td class=\"hidden\"></td>"
   ::  hidden & playing: reveal button (left); flag toggle via separate tiny form
   ;:  weld
     "<td class=\"hidden\">"
-    "<form method=\"POST\" action=\"/reveal?x={xs}&y={ys}\" style=\"display:inline\">"
-    "<button type=\"submit\" class=\"cellbtn\">?</button></form>"
-    "<form method=\"POST\" action=\"/flag?x={xs}&y={ys}\" style=\"display:inline\">"
-    "<button type=\"submit\" class=\"flagsm\">f</button></form>"
+    "<form method=\"POST\" action=\"/reveal?x={xs}&y={ys}\">"
+    "<button type=\"submit\" class=\"cellbtn\">&#129679;</button></form>"
+    "<form method=\"POST\" action=\"/flag?x={xs}&y={ys}\">"
+    "<button type=\"submit\" class=\"flagsm\">&#9971;</button></form>"
     "</td>"
   ==
 ::  +status-line: human-readable status text.
@@ -212,7 +214,7 @@
       rows
       "</table>"
       "<form method=\"POST\" action=\"/new\"><button type=\"submit\">New game</button></form>"
-      "<p style=\"color:#666\">Each cell has two buttons: <b>?</b> reveals, <b>f</b> toggles a flag.</p>"
+      "<p style=\"color:#666\">Each cell has two buttons: <b>&#129679;</b> reveals, <b>&#9971;</b> toggles a flag.</p>"
       "</body></html>"
     ==
   (to-octs (crip doc))
@@ -224,13 +226,14 @@
   %-  trip
   '''
   body{font-family:monospace;background:#eee}
-  table{border-collapse:collapse;margin:1em 0}
-  td{width:28px;height:28px;text-align:center;border:1px solid #999;padding:0}
+  table{table-layout:fixed;border-collapse:collapse;margin:1em 0}
+  td{width:44px;height:44px;box-sizing:border-box;text-align:center;vertical-align:middle;border:1px solid #999;padding:0;font-size:22px;line-height:44px}
   td.hidden,td.flag{background:#bbb}
   td.open{background:#ddd}
-  td.mine{background:#f55;font-weight:bold}
-  .cellbtn,.flagsm,.flagbtn{width:100%;height:28px;border:0;background:transparent;cursor:pointer;font-family:monospace}
-  .flagsm{font-size:9px;color:#900}
+  td.mine{background:#f55}
+  td form{display:inline-block;margin:0;padding:0;width:50%;height:100%;vertical-align:top}
+  td form:only-child{width:100%}
+  .cellbtn,.flagsm,.flagbtn{width:100%;height:100%;border:0;background:transparent;cursor:pointer;font-size:18px;padding:0;line-height:42px}
   h1{margin-bottom:0}.status{font-weight:bold;margin:0.5em 0}
   '''
 ::  +width-by-height-line: descriptive header text.
