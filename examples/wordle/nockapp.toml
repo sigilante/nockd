@@ -1,9 +1,0 @@
-[package]
-name = "wordle"
-version = "0.1.0"
-description = "A playable Wordle game served over HTTP, with all game logic in the Hoon kernel."
-authors = ["sigilante"]
-license = "MIT"
-template = "http-server"
-
-[dependencies]

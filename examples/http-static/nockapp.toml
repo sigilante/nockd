@@ -1,9 +1,0 @@
-[package]
-name = "http-static"
-version = "0.1.0"
-description = "The simplest 'serve a page' NockApp: an HTTP server that serves STATIC HTML straight from the Hoon kernel (no mutable state)."
-authors = ["sigilante"]
-license = "MIT"
-template = "http-static"
-
-[dependencies]

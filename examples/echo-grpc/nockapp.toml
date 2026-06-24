@@ -1,9 +1,0 @@
-[package]
-name = "echo-grpc"
-version = "0.1.0"
-description = "Demonstrates the private NockApp gRPC surface: a gRPC poke stores a value in kernel state; a gRPC peek reads it back. A poke/peek echo roundtrip over gRPC."
-authors = ["sigilante"]
-license = "MIT"
-template = "grpc"
-
-[dependencies]

@@ -1,9 +1,0 @@
-[package]
-name = "hello-basic"
-version = "0.1.0"
-description = "The minimal supervised NockApp: boots the basic kernel and emits a heartbeat tick metric on a loop."
-authors = ["sigilante"]
-license = "MIT"
-template = "basic"
-
-[dependencies]

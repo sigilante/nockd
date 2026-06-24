@@ -1,9 +1,0 @@
-[package]
-name = "conway"
-version = "0.1.0"
-description = "Conway's Game of Life served over HTTP, with all game logic in the Hoon kernel."
-authors = ["sigilante"]
-license = "MIT"
-template = "http-server"
-
-[dependencies]

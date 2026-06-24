@@ -1,9 +1,0 @@
-[package]
-name = "balance-api"
-version = "0.1.0"
-description = "HTTP explorer backend: GET /balance/<pubkey> returns the pubkey's balance read live from Nockchain over gRPC."
-authors = ["sigilante"]
-license = "MIT"
-template = "basic"
-
-[dependencies]
