@@ -54,6 +54,7 @@ async fn main() -> Result<()> {
             jam,
             endpoint,
             web_port,
+            icon,
             health_addr,
             status_cmd,
             status_label,
@@ -73,7 +74,7 @@ async fn main() -> Result<()> {
             });
 
             // A manifest supplies all config; otherwise use the flags.
-            let (name, project, bin_target, bin, jam, endpoint, port, health_addr, status_cmd, status_label, restart, target, args) =
+            let (name, project, bin_target, bin, jam, endpoint, port, icon, health_addr, status_cmd, status_label, restart, target, args) =
                 if let Some(mpath) = manifest {
                     let d = config::DeployManifest::load(&mpath)?.deploy;
                     (
@@ -84,6 +85,7 @@ async fn main() -> Result<()> {
                         d.jam,
                         d.endpoint,
                         d.port,
+                        d.icon,
                         d.health_addr,
                         d.status.cmd,
                         d.status.label,
@@ -94,10 +96,25 @@ async fn main() -> Result<()> {
                     )
                 } else {
                     (
-                        name, project, bin_target, bin, jam, endpoint, web_port, health_addr, status_cmd,
+                        name, project, bin_target, bin, jam, endpoint, web_port, icon, health_addr, status_cmd,
                         status_label, restart, target, args,
                     )
                 };
+
+            // Resolve the icon (a path → data URI, an inline data: URI → as-is) relative to the
+            // manifest's dir, or the cwd for flag deploys. Done client-side so the daemon stores
+            // a ready-to-serve data URI.
+            let icon = match icon {
+                Some(spec) => {
+                    let base = manifest_path
+                        .as_deref()
+                        .and_then(|p| std::path::Path::new(p).parent())
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or_else(|| std::path::PathBuf::from("."));
+                    Some(config::resolve_icon(&base, &spec)?)
+                }
+                None => None,
+            };
 
             let (name, bin_path, jam_path, provenance) = if let Some(proj) = project {
                 let built = buildkit::build_project(&proj, bin_target.as_deref())?;
@@ -168,6 +185,7 @@ async fn main() -> Result<()> {
                 status_label,
                 port,
                 manifest_path,
+                icon,
                 provenance,
                 attestation: attestation_json,
             };

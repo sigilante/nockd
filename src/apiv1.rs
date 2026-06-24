@@ -42,6 +42,7 @@ pub struct AppV1 {
     pub status_line: Option<String>,   // e.g. "height 184302" — from the status command
     pub port: Option<u16>,             // HTTP port the app serves on; dashboard links to it
     pub manifest_path: Option<String>, // nockd.toml this app deploys from; enables "Reload"
+    pub has_icon: bool,                // true → fetch the image from /api/v1/apps/:name/icon
     pub pid: Option<u32>,
     pub created_at: i64,
     pub updated_at: i64,
@@ -100,6 +101,7 @@ fn to_app_v1(row: AppRow, rt: Option<RuntimeStatus>) -> AppV1 {
         status_line: rt.as_ref().and_then(|r| r.status_line.clone()),
         port: row.port,
         manifest_path: row.manifest_path,
+        has_icon: row.icon.is_some(),
         pid: rt.as_ref().and_then(|r| r.pid),
         created_at: row.created_at,
         updated_at: row.updated_at,

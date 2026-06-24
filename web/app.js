@@ -67,6 +67,11 @@ const vfy = (v) => v === 'verified' ? `<span class="vfy ok">✓ verified</span>`
 // An HTTP app's "open app" link, derived from its declared port + the host you're viewing
 // nockd on (never a stored URL). null if the app serves no port.
 const appLink = (a) => (a.port ? `${location.protocol}//${location.hostname}:${a.port}/` : null);
+// App icon <img>, served from /icon (cache-busted by updated_at so a redeploy refreshes it).
+// Empty string when the app has no icon — callers fall back to the status glyph.
+const appIcon = (a, cls = '') => a.has_icon
+  ? `<img class="appicon ${cls}" src="/api/v1/apps/${encodeURIComponent(a.name)}/icon?v=${a.updated_at}" alt="" loading="lazy">`
+  : '';
 
 function fmtUptime(s) {
   if (s == null) return '—';
@@ -152,7 +157,7 @@ function fleetView() {
       const rst = a.restart_count > 3 ? `<span class="rst-hot">${a.restart_count}</span>` : a.restart_count;
       const tr = $(`<tr class="${idle ? 'idle' : ''}">
         <td>${glyph(a.status)}</td>
-        <td class="cell-app">${esc(a.name)}${appLink(a) ? ` <a class="relay-mini" href="${esc(appLink(a))}" target="_blank" rel="noopener" title="Open ${esc(appLink(a))}">↗</a>` : ''}</td>
+        <td class="cell-app">${appIcon(a)}${esc(a.name)}${appLink(a) ? ` <a class="relay-mini" href="${esc(appLink(a))}" target="_blank" rel="noopener" title="Open ${esc(appLink(a))}">↗</a>` : ''}</td>
         <td class="mono">${shortHash(a.artifact_hash)}</td>
         <td class="mono">${esc(a.endpoint_name || '—')}</td>
         <td class="mono">${fmtUptime(a.uptime_s)}</td>
@@ -179,7 +184,7 @@ function fleetView() {
           <span>${a.status_line ? esc(a.status_line) : (a.status === 'crashing' ? `${a.restart_count} rst` : fmtUptime(a.uptime_s))}</span>
         </div>
         <div class="body">
-          <div class="tname">${esc(a.name)}</div>
+          <div class="tname">${appIcon(a)}${esc(a.name)}</div>
           <div class="meta">${esc(a.artifact_hash ? a.artifact_hash.slice(0, 18) + '…' : '—')}</div>
           <div class="meta">${esc(a.endpoint_name || 'no endpoint')}</div>
           <div class="tfoot"><span>up ${fmtUptime(a.uptime_s)}</span>${vfy(a.verified)}</div>
@@ -213,6 +218,7 @@ function detailView(name) {
       <div class="detail-head">
         <a class="back" href="#/">‹ FLEET</a>
         ${glyph(a.status)}
+        ${appIcon(a, 'big')}
         <h1>${esc(a.name)}</h1>
         <span class="sub">${esc(a.restart_policy)} · up ${fmtUptime(a.uptime_s)} · pid ${a.pid ?? '—'}${a.status_line ? ' · ' + esc(metricStr(a)) : ''}</span>
         <div class="actions">

@@ -164,6 +164,11 @@ pub struct DeploySection {
     /// `localhost:<port>` from it.
     #[serde(default)]
     pub port: Option<u16>,
+    /// App icon for the dashboard: either an inline `data:` URI (base64) or a path to an image
+    /// file (relative to the manifest), which the CLI encodes into a data URI at deploy time.
+    /// Resolved via [`resolve_icon`] so both `deploy` (client) and `reload` (daemon) agree.
+    #[serde(default)]
+    pub icon: Option<String>,
     /// Custom status command + label (e.g. block height).
     #[serde(default)]
     pub status: StatusSection,
@@ -185,4 +190,56 @@ impl DeployManifest {
             .with_context(|| format!("reading manifest {}", path.display()))?;
         toml::from_str(&text).with_context(|| format!("parsing manifest {}", path.display()))
     }
+}
+
+/// Largest icon we accept (decoded bytes). Icons are favicon-sized; this caps registry/API
+/// bloat and abuse. ~256 KB comfortably fits a detailed PNG or any SVG.
+pub const MAX_ICON_BYTES: usize = 256 * 1024;
+
+/// Resolve a manifest/flag `icon` value into a `data:` URI suitable for an `<img src>`.
+///
+/// Accepts an inline `data:` URI (passed through) or a path to an image file, resolved
+/// relative to `base_dir` (the manifest's directory, or the cwd for flag deploys) and encoded.
+/// Mime is inferred from the extension. Used by both `deploy` (client-side) and `reload`
+/// (daemon-side) so the two paths agree on how an icon is produced.
+pub fn resolve_icon(base_dir: &std::path::Path, icon: &str) -> Result<String> {
+    use base64::Engine;
+    let icon = icon.trim();
+    if icon.starts_with("data:") {
+        return Ok(icon.to_string());
+    }
+    let path = {
+        let p = std::path::Path::new(icon);
+        if p.is_absolute() { p.to_path_buf() } else { base_dir.join(p) }
+    };
+    let bytes = std::fs::read(&path)
+        .with_context(|| format!("reading icon {}", path.display()))?;
+    if bytes.len() > MAX_ICON_BYTES {
+        anyhow::bail!(
+            "icon {} is {} bytes; max is {} (use a smaller, favicon-sized image)",
+            path.display(),
+            bytes.len(),
+            MAX_ICON_BYTES
+        );
+    }
+    let mime = match path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("png") => "image/png",
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("gif") => "image/gif",
+        Some("webp") => "image/webp",
+        Some("svg") => "image/svg+xml",
+        Some("ico") => "image/x-icon",
+        other => anyhow::bail!(
+            "unsupported icon type {:?} for {} (use png/jpg/gif/webp/svg/ico, or an inline data: URI)",
+            other,
+            path.display()
+        ),
+    };
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Ok(format!("data:{mime};base64,{b64}"))
 }

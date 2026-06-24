@@ -63,6 +63,10 @@ pub enum Commands {
         /// avoid the global --port, which is the daemon's control-API port.)
         #[arg(long)]
         web_port: Option<u16>,
+        /// App icon for the dashboard: a path to an image (png/jpg/gif/webp/svg/ico) or an
+        /// inline `data:` URI. A path is encoded into a data URI at deploy time.
+        #[arg(long)]
+        icon: Option<String>,
         /// App's private/admin gRPC address for the health gate (host:port).
         #[arg(long)]
         health_addr: Option<String>,

@@ -179,6 +179,10 @@ a.btn.relay:hover { background: var(--ink); border-color: var(--ink); }
 /* Discreet launcher next to an app's name in the fleet table. */
 .relay-mini { color: var(--blue); text-decoration: none; font-weight: 700; padding: 0 4px; font-size: 14px; }
 .relay-mini:hover { color: var(--ink); }
+/* App icon: square, crisp on the paper ground. Sits inline with the app name; `big` is the
+   detail header. object-fit keeps non-square source images from distorting. */
+.appicon { width: 20px; height: 20px; object-fit: contain; vertical-align: middle; margin-right: 9px; border: 2px solid var(--ink); background: var(--paper); }
+.appicon.big { width: 34px; height: 34px; margin-right: 4px; }
 
 .grid2 { display: grid; grid-template-columns: 1.55fr 1fr; gap: 6px; background: var(--ink); padding: 6px; }
 .col { display: flex; flex-direction: column; gap: 6px; }

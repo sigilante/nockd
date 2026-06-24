@@ -22,6 +22,10 @@ restart = "always"
 # HTTP_PORT) and the dashboard shows an "Open app ↗" relay link to localhost:<port>.
 port    = 8084
 
+# Dashboard icon: a path (relative to this manifest) to an image, or an inline data: URI. The
+# CLI encodes a path into a data URI at deploy time; the dashboard shows it in the table/tiles.
+icon    = "icon.svg"
+
 # Status metric: nockd runs this every few seconds with the ANSI- and NUL-stripped recent
 # log on stdin and cwd = the app's state dir. The kernel logs `metric: moves=<N>` on EVERY
 # request, so the most recent cumulative move count surfaces as the MOVES column in `nockd ps`.

@@ -102,6 +102,12 @@ let port = std::env::var("NOCKD_APP_PORT").unwrap_or_else(|_| "8085".into()); //
 std::env::set_var("HTTP_PORT", &port);
 ```
 
+### Give it an icon — **[nockd feature]**
+Set `icon = "icon.svg"` in `nockd.toml` (a path relative to the manifest, or an inline `data:`
+URI). The CLI base64-encodes a path into a data URI at deploy time; the dashboard shows it in
+the table, tiles, and detail header (served from `/api/v1/apps/<app>/icon`, so it doesn't bloat
+the app list). Keep it favicon-sized (max 256 KB). Reload picks up icon edits too.
+
 ### Edited nockd.toml? Reload, don't redeploy — **[nockd feature]**
 Config (`port`, `args`, `status`, `endpoint`, `restart`) is written to the registry at deploy
 time. After editing `nockd.toml`, click **Reload** on the dashboard status page (or

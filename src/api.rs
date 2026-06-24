@@ -47,6 +47,9 @@ pub struct DeployRequest {
     /// the daemon can re-read it for the "Reload" action. None for flag-based deploys.
     #[serde(default)]
     pub manifest_path: Option<String>,
+    /// App icon as a `data:` URI (already resolved client-side). Served from `/icon`.
+    #[serde(default)]
+    pub icon: Option<String>,
     #[serde(default)]
     pub provenance: Option<String>,
     /// Optional build attestation (JSON) — a signed statement binding these hashes.
@@ -94,6 +97,7 @@ pub fn router(daemon: Arc<Daemon>) -> Router {
         .route("/api/v1/apps", get(apiv1::list_apps))
         .route("/api/v1/apps/:name", get(apiv1::get_app))
         .route("/api/v1/apps/:name/events", get(apiv1::app_events))
+        .route("/api/v1/apps/:name/icon", get(app_icon))
         .route("/api/v1/apps/:name/logs", get(apiv1::logs_sse)) // SSE (follow)
         .route("/api/v1/apps/:name/restart", post(restart))
         .route("/api/v1/apps/:name/reload", post(reload))
@@ -174,6 +178,11 @@ async fn deploy(
     d.registry
         .set_artifact_verification(&rec.artifact_hash, &verified, builder.as_deref())?;
 
+    // Guard against an oversized icon from a hand-rolled client (the CLI already caps it).
+    if let Some(icon) = &req.icon {
+        validate_icon(icon).map_err(|m| ApiError::bad_request(&m))?;
+    }
+
     let state_path = d.paths.state_dir(&req.name);
     d.registry.upsert_app(
         &req.name,
@@ -187,6 +196,7 @@ async fn deploy(
         req.status_label.as_deref(),
         req.port,
         req.manifest_path.as_deref(),
+        req.icon.as_deref(),
     )?;
     d.registry.add_event(
         &req.name,
@@ -236,13 +246,24 @@ async fn reload(
              redeploy with `nockd deploy -f nockd.toml` to enable Reload",
         )
     })?;
-    let manifest = crate::config::DeployManifest::load(std::path::Path::new(&manifest_path))
+    let manifest_path = std::path::Path::new(&manifest_path);
+    let manifest = crate::config::DeployManifest::load(manifest_path)
         .map_err(|e| {
             ApiError::bad_request(&format!(
-                "could not read manifest {manifest_path}: {e} (is it still on this machine?)"
+                "could not read manifest {}: {e} (is it still on this machine?)",
+                manifest_path.display()
             ))
         })?
         .deploy;
+    // Re-resolve the icon relative to the manifest's dir (a path turns into a data URI; an
+    // inline data: URI passes through), so Reload picks up icon edits too.
+    let base_dir = manifest_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let icon = match &manifest.icon {
+        Some(i) => Some(crate::config::resolve_icon(base_dir, i).map_err(|e| {
+            ApiError::bad_request(&format!("could not resolve icon: {e}"))
+        })?),
+        None => None,
+    };
     d.registry.update_app_config(
         &name,
         manifest.endpoint.as_deref(),
@@ -252,6 +273,7 @@ async fn reload(
         manifest.status.cmd.as_deref(),
         manifest.status.label.as_deref(),
         manifest.port,
+        icon.as_deref(),
     )?;
     d.registry.set_desired(&name, "running")?;
     d.supervisor.request_restart(&name);
@@ -259,6 +281,52 @@ async fn reload(
         .add_event(&name, "reload", "manifest re-read; config re-applied")?;
     d.reconcile();
     Ok(Json(OkResponse { ok: true }))
+}
+
+/// Serve an app's icon (decoded from its stored `data:` URI) with a content-type + cache
+/// headers. Kept off the app-list JSON so the dashboard's frequent polls stay small.
+async fn app_icon(
+    State(d): State<Arc<Daemon>>,
+    Path(name): Path<String>,
+) -> Result<Response, ApiError> {
+    let app = d.registry.get_app(&name)?.ok_or_else(|| ApiError::not_found(&name))?;
+    let uri = app
+        .icon
+        .ok_or_else(|| ApiError::not_found(&format!("{name} (no icon)")))?;
+    let (mime, bytes) = decode_data_uri(&uri)
+        .ok_or_else(|| ApiError::bad_request("stored icon is not a base64 data: URI"))?;
+    Ok((
+        [
+            (axum::http::header::CONTENT_TYPE, mime),
+            (axum::http::header::CACHE_CONTROL, "public, max-age=300".to_string()),
+        ],
+        bytes,
+    )
+        .into_response())
+}
+
+/// Parse `data:<mime>;base64,<data>` → (mime, decoded bytes). None if not a base64 data URI.
+fn decode_data_uri(uri: &str) -> Option<(String, Vec<u8>)> {
+    let rest = uri.strip_prefix("data:")?;
+    let (meta, data) = rest.split_once(',')?;
+    let meta = meta.strip_suffix(";base64")?;
+    let mime = if meta.is_empty() { "application/octet-stream" } else { meta };
+    let bytes = base64::engine::general_purpose::STANDARD.decode(data.trim()).ok()?;
+    Some((mime.to_string(), bytes))
+}
+
+/// Validate a client-supplied icon: must be a base64 `data:` URI within the size cap.
+fn validate_icon(uri: &str) -> Result<(), String> {
+    let (_, bytes) = decode_data_uri(uri)
+        .ok_or_else(|| "icon must be a base64 data: URI".to_string())?;
+    if bytes.len() > crate::config::MAX_ICON_BYTES {
+        return Err(format!(
+            "icon is {} bytes; max is {}",
+            bytes.len(),
+            crate::config::MAX_ICON_BYTES
+        ));
+    }
+    Ok(())
 }
 
 async fn stop(State(d): State<Arc<Daemon>>, Path(name): Path<String>) -> Result<Json<OkResponse>, ApiError> {

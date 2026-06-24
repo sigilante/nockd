@@ -17,6 +17,11 @@ args = []
 # an "Open app ↗" relay link to localhost:<port>.
 # port = 8085
 
+# Dashboard icon: a path (relative to this manifest) to an image (png/jpg/gif/webp/svg/ico),
+# or an inline `data:` URI. A path is base64-encoded into a data URI at deploy time. Keep it
+# small (favicon-sized; max 256 KB).
+# icon = "icon.svg"
+
 # A named Nockchain endpoint this app attaches to. Register it once:
 #   nockd endpoint add mainnet-rpc https://rpc.nockchain.net
 # nockd substitutes {endpoint} in args + sets NOCKD_ENDPOINT_URL.

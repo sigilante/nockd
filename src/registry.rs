@@ -40,6 +40,9 @@ pub struct AppRow {
     /// re-read the manifest and re-apply its declarative config (the dashboard "Reload"
     /// button) without a client-side rebuild. None for flag-based deploys.
     pub manifest_path: Option<String>,
+    /// App icon as a `data:` URI (base64), shown on the dashboard. None falls back to the
+    /// status glyph. Served from `/api/v1/apps/:name/icon`, not inlined in the app list.
+    pub icon: Option<String>,
     /// Verification status of the current artifact (verified | unverified | drift).
     pub verified_status: Option<String>,
     pub created_at: i64,
@@ -95,6 +98,7 @@ impl Registry {
                 status_label   TEXT,
                 port           INTEGER,
                 manifest_path  TEXT,
+                icon           TEXT,
                 created_at     INTEGER NOT NULL,
                 updated_at     INTEGER NOT NULL
             );
@@ -121,6 +125,7 @@ impl Registry {
             "ALTER TABLE app ADD COLUMN status_label TEXT",
             "ALTER TABLE app ADD COLUMN port INTEGER",
             "ALTER TABLE app ADD COLUMN manifest_path TEXT",
+            "ALTER TABLE app ADD COLUMN icon TEXT",
             "ALTER TABLE artifact ADD COLUMN verified_status TEXT",
             "ALTER TABLE artifact ADD COLUMN builder TEXT",
         ] {
@@ -160,18 +165,19 @@ impl Registry {
         status_label: Option<&str>,
         port: Option<u16>,
         manifest_path: Option<&str>,
+        icon: Option<&str>,
     ) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         let now = now_secs();
         let args_json = serde_json::to_string(args)?;
         conn.execute(
-            "INSERT INTO app (name, artifact_hash, endpoint, restart_policy, args, state_path, desired_status, admin_addr, status_cmd, status_label, port, manifest_path, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'running', ?7, ?8, ?9, ?11, ?12, ?10, ?10)
+            "INSERT INTO app (name, artifact_hash, endpoint, restart_policy, args, state_path, desired_status, admin_addr, status_cmd, status_label, port, manifest_path, icon, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'running', ?7, ?8, ?9, ?11, ?12, ?13, ?10, ?10)
              ON CONFLICT(name) DO UPDATE SET
                 artifact_hash=?2, endpoint=?3, restart_policy=?4, args=?5,
                 state_path=?6, desired_status='running', admin_addr=?7,
-                status_cmd=?8, status_label=?9, port=?11, manifest_path=?12, updated_at=?10",
-            rusqlite::params![name, artifact_hash, endpoint, restart_policy, args_json, state_path, admin_addr, status_cmd, status_label, now, port, manifest_path],
+                status_cmd=?8, status_label=?9, port=?11, manifest_path=?12, icon=?13, updated_at=?10",
+            rusqlite::params![name, artifact_hash, endpoint, restart_policy, args_json, state_path, admin_addr, status_cmd, status_label, now, port, manifest_path, icon],
         )?;
         Ok(())
     }
@@ -190,13 +196,14 @@ impl Registry {
         status_cmd: Option<&str>,
         status_label: Option<&str>,
         port: Option<u16>,
+        icon: Option<&str>,
     ) -> Result<bool> {
         let conn = self.conn.lock().unwrap();
         let args_json = serde_json::to_string(args)?;
         let n = conn.execute(
             "UPDATE app SET endpoint=?2, restart_policy=?3, args=?4, admin_addr=?5,
-                status_cmd=?6, status_label=?7, port=?8, updated_at=?9 WHERE name=?1",
-            rusqlite::params![name, endpoint, restart_policy, args_json, admin_addr, status_cmd, status_label, port, now_secs()],
+                status_cmd=?6, status_label=?7, port=?8, icon=?9, updated_at=?10 WHERE name=?1",
+            rusqlite::params![name, endpoint, restart_policy, args_json, admin_addr, status_cmd, status_label, port, icon, now_secs()],
         )?;
         Ok(n > 0)
     }
@@ -214,7 +221,7 @@ impl Registry {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT a.name, a.artifact_hash, ar.kernel_hash, a.endpoint, a.restart_policy,
-                    a.args, a.state_path, a.desired_status, a.created_at, a.updated_at, a.admin_addr, a.status_cmd, a.status_label, ar.verified_status, a.port, a.manifest_path
+                    a.args, a.state_path, a.desired_status, a.created_at, a.updated_at, a.admin_addr, a.status_cmd, a.status_label, ar.verified_status, a.port, a.manifest_path, a.icon
              FROM app a LEFT JOIN artifact ar ON ar.hash = a.artifact_hash
              WHERE a.name = ?1",
         )?;
@@ -228,7 +235,7 @@ impl Registry {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT a.name, a.artifact_hash, ar.kernel_hash, a.endpoint, a.restart_policy,
-                    a.args, a.state_path, a.desired_status, a.created_at, a.updated_at, a.admin_addr, a.status_cmd, a.status_label, ar.verified_status, a.port, a.manifest_path
+                    a.args, a.state_path, a.desired_status, a.created_at, a.updated_at, a.admin_addr, a.status_cmd, a.status_label, ar.verified_status, a.port, a.manifest_path, a.icon
              FROM app a LEFT JOIN artifact ar ON ar.hash = a.artifact_hash
              ORDER BY a.name",
         )?;
@@ -258,6 +265,7 @@ impl Registry {
             verified_status: row.get(13)?,
             port: row.get(14)?,
             manifest_path: row.get(15)?,
+            icon: row.get(16)?,
         })
     }
 
