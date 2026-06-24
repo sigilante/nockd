@@ -90,6 +90,12 @@ cmd   = "grep -oE 'requests=[0-9]+' | tail -1 | grep -oE '[0-9]+'"
 (NUL bytes in kernel-boot logs used to silently blank the metric on macOS — nockd strips
 them now, so the recipe above works on every platform.)
 
+### Serves a web page? Declare its URL — **[nockd feature]**
+If your app binds its own HTTP port (e.g. common-blog on `:8085`), nockd can't infer it. Set
+`link = "http://127.0.0.1:8085"` in `nockd.toml` (or `--link`) and the dashboard renders an
+**"Open app ↗"** relay link on the status page (plus a ↗ next to the name in the table) that
+opens the running NockApp directly.
+
 ### Reference an endpoint by name
 Chain apps take the RPC URL via an arg with the `{endpoint}` placeholder; nockd substitutes
 the registered URL and also sets `NOCKD_ENDPOINT_URL`. Set `endpoint = "mainnet-rpc"` in

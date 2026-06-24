@@ -12,6 +12,11 @@ app     = "common-blog"
 project = "."
 restart = "always"
 
+# The app serves its own web page on a port it binds internally (HTTP_PORT=8085 in main.rs).
+# nockd can't infer that, so declare it: the dashboard shows an "Open app ↗" relay link on the
+# status page (and a ↗ next to the name in the table) that opens the blog directly.
+link    = "http://127.0.0.1:8085"
+
 # Status metric: nockd runs this every few seconds with the ANSI- and NUL-stripped recent log
 # on stdin and cwd = the app's state dir. The kernel logs `metric: posts=<N>` (the live count
 # of published posts) on EVERY request, so the most recent value is always available to grep,

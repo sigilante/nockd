@@ -171,6 +171,14 @@ tr.idle .mono { color: var(--ink-muted); }
 .btn { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; padding: 11px 18px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); }
 .btn.primary { background: var(--ink); color: var(--cream); }
 .btn.danger { border-color: var(--red); color: var(--red); background: var(--paper); }
+/* Relay link to the app's own page — a blue accent button, text-decoration none. */
+a.btn.relay { background: var(--blue); color: var(--cream); border-color: var(--blue); text-decoration: none; display: inline-flex; align-items: center; }
+a.btn.relay:hover { background: var(--ink); border-color: var(--ink); }
+.relay-inline { color: var(--blue); text-decoration: none; font-family: var(--mono); }
+.relay-inline:hover { text-decoration: underline; }
+/* Discreet launcher next to an app's name in the fleet table. */
+.relay-mini { color: var(--blue); text-decoration: none; font-weight: 700; padding: 0 4px; font-size: 14px; }
+.relay-mini:hover { color: var(--ink); }
 
 .grid2 { display: grid; grid-template-columns: 1.55fr 1fr; gap: 6px; background: var(--ink); padding: 6px; }
 .col { display: flex; flex-direction: column; gap: 6px; }

@@ -39,6 +39,9 @@ pub struct DeployRequest {
     pub status_cmd: Option<String>,
     #[serde(default)]
     pub status_label: Option<String>,
+    /// The app's own web page URL (e.g. `http://127.0.0.1:8085`), surfaced as a relay link.
+    #[serde(default)]
+    pub link: Option<String>,
     #[serde(default)]
     pub provenance: Option<String>,
     /// Optional build attestation (JSON) — a signed statement binding these hashes.
@@ -175,6 +178,7 @@ async fn deploy(
         req.admin_addr.as_deref(),
         req.status_cmd.as_deref(),
         req.status_label.as_deref(),
+        req.link.as_deref(),
     )?;
     d.registry.add_event(
         &req.name,

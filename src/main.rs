@@ -53,6 +53,7 @@ async fn main() -> Result<()> {
             bin,
             jam,
             endpoint,
+            link,
             health_addr,
             status_cmd,
             status_label,
@@ -63,7 +64,7 @@ async fn main() -> Result<()> {
             args,
         } => {
             // A manifest supplies all config; otherwise use the flags.
-            let (name, project, bin_target, bin, jam, endpoint, health_addr, status_cmd, status_label, restart, target, args) =
+            let (name, project, bin_target, bin, jam, endpoint, link, health_addr, status_cmd, status_label, restart, target, args) =
                 if let Some(mpath) = manifest {
                     let d = config::DeployManifest::load(&mpath)?.deploy;
                     (
@@ -73,6 +74,7 @@ async fn main() -> Result<()> {
                         d.bin,
                         d.jam,
                         d.endpoint,
+                        d.link,
                         d.health_addr,
                         d.status.cmd,
                         d.status.label,
@@ -83,7 +85,7 @@ async fn main() -> Result<()> {
                     )
                 } else {
                     (
-                        name, project, bin_target, bin, jam, endpoint, health_addr, status_cmd,
+                        name, project, bin_target, bin, jam, endpoint, link, health_addr, status_cmd,
                         status_label, restart, target, args,
                     )
                 };
@@ -155,6 +157,7 @@ async fn main() -> Result<()> {
                 admin_addr: health_addr,
                 status_cmd,
                 status_label,
+                link,
                 provenance,
                 attestation: attestation_json,
             };

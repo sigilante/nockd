@@ -158,6 +158,10 @@ pub struct DeploySection {
     /// Named Nockchain endpoint this app attaches to (see the endpoint registry).
     #[serde(default)]
     pub endpoint: Option<String>,
+    /// The app's own web page URL (e.g. `http://127.0.0.1:8085` for an HTTP NockApp). nockd
+    /// can't infer the app's port, so declare it here; the dashboard shows an "open app" link.
+    #[serde(default)]
+    pub link: Option<String>,
     /// Custom status command + label (e.g. block height).
     #[serde(default)]
     pub status: StatusSection,
