@@ -102,6 +102,14 @@ let port = std::env::var("NOCKD_APP_PORT").unwrap_or_else(|_| "8085".into()); //
 std::env::set_var("HTTP_PORT", &port);
 ```
 
+### Edited nockd.toml? Reload, don't redeploy — **[nockd feature]**
+Config (`port`, `args`, `status`, `endpoint`, `restart`) is written to the registry at deploy
+time. After editing `nockd.toml`, click **Reload** on the dashboard status page (or
+`nockd reload <app>`): the daemon re-reads the manifest it deployed from and re-applies the
+config in place, then restarts — **no rebuild**. (Changed the *code*? That needs a real
+`nockd deploy -f nockd.toml` to rebuild + ship a new artifact; the daemon never compiles.)
+Only works for apps deployed with `-f` (the daemon needs a manifest path to re-read).
+
 ### Reference an endpoint by name
 Chain apps take the RPC URL via an arg with the `{endpoint}` placeholder; nockd substitutes
 the registered URL and also sets `NOCKD_ENDPOINT_URL`. Set `endpoint = "mainnet-rpc"` in

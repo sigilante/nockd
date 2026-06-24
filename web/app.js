@@ -217,13 +217,19 @@ function detailView(name) {
         <span class="sub">${esc(a.restart_policy)} · up ${fmtUptime(a.uptime_s)} · pid ${a.pid ?? '—'}${a.status_line ? ' · ' + esc(metricStr(a)) : ''}</span>
         <div class="actions">
           ${appLink(a) ? `<a class="btn relay" href="${esc(appLink(a))}" target="_blank" rel="noopener" title="Open ${esc(appLink(a))}">Open app ↗</a>` : ''}
+          ${a.manifest_path ? `<button class="btn" data-act="reload" title="Re-read ${esc(a.manifest_path)} and re-apply its config (no rebuild)">Reload</button>` : ''}
           <button class="btn" data-act="restart">Restart</button>
           <button class="btn" data-act="start">Start</button>
           <button class="btn danger" data-act="stop">Stop</button>
         </div>
       </div>`);
     head.querySelectorAll('[data-act]').forEach((b) =>
-      b.onclick = async () => { await post(`/api/v1/apps/${encodeURIComponent(name)}/${b.dataset.act}`); setTimeout(render, 400); });
+      b.onclick = async () => {
+        const r = await post(`/api/v1/apps/${encodeURIComponent(name)}/${b.dataset.act}`);
+        // Surface failures (e.g. Reload when the manifest is missing) instead of silently no-op.
+        if (!r.ok) { banner(`${b.dataset.act} failed — ${await r.text()}`); setTimeout(clearBanner, 6000); }
+        setTimeout(render, 400);
+      });
     app.append(head);
 
     const body = $(`<div class="grid2">

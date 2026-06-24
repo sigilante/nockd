@@ -153,6 +153,10 @@ pub enum Commands {
     /// Restart an app.
     Restart { name: String },
 
+    /// Re-read an app's nockd.toml and re-apply its config (port, args, status, endpoint,
+    /// restart), then restart it. Does NOT rebuild — for that, `nockd deploy -f` again.
+    Reload { name: String },
+
     /// Stop an app (keeps it deployed).
     Stop { name: String },
 

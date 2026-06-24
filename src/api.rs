@@ -43,6 +43,10 @@ pub struct DeployRequest {
     /// the dashboard derives a `localhost:<port>` relay link from it.
     #[serde(default)]
     pub port: Option<u16>,
+    /// Absolute path to the `nockd.toml` this deploy came from (when deployed with `-f`), so
+    /// the daemon can re-read it for the "Reload" action. None for flag-based deploys.
+    #[serde(default)]
+    pub manifest_path: Option<String>,
     #[serde(default)]
     pub provenance: Option<String>,
     /// Optional build attestation (JSON) — a signed statement binding these hashes.
@@ -81,6 +85,7 @@ pub fn router(daemon: Arc<Daemon>) -> Router {
         // Legacy surface used by the CLI + TUI.
         .route("/api/apps", get(list_apps).post(deploy))
         .route("/api/apps/:name/restart", post(restart))
+        .route("/api/apps/:name/reload", post(reload))
         .route("/api/apps/:name/stop", post(stop))
         .route("/api/apps/:name/start", post(start))
         .route("/api/apps/:name/logs", get(logs))
@@ -91,6 +96,7 @@ pub fn router(daemon: Arc<Daemon>) -> Router {
         .route("/api/v1/apps/:name/events", get(apiv1::app_events))
         .route("/api/v1/apps/:name/logs", get(apiv1::logs_sse)) // SSE (follow)
         .route("/api/v1/apps/:name/restart", post(restart))
+        .route("/api/v1/apps/:name/reload", post(reload))
         .route("/api/v1/apps/:name/stop", post(stop))
         .route("/api/v1/apps/:name/start", post(start))
         .route("/api/v1/events", get(apiv1::events_sse)) // SSE (follow)
@@ -180,6 +186,7 @@ async fn deploy(
         req.status_cmd.as_deref(),
         req.status_label.as_deref(),
         req.port,
+        req.manifest_path.as_deref(),
     )?;
     d.registry.add_event(
         &req.name,
@@ -207,6 +214,49 @@ async fn restart(
     d.registry.set_desired(&name, "running")?;
     d.supervisor.request_restart(&name);
     d.registry.add_event(&name, "restart", "restart requested")?;
+    d.reconcile();
+    Ok(Json(OkResponse { ok: true }))
+}
+
+/// Re-read the app's `nockd.toml` and re-apply its declarative config (port, args, status,
+/// endpoint, restart) to the current artifact, then restart so the new args/port take effect.
+/// Does NOT rebuild — the daemon never compiles (DESIGN principle 7); a from-source redeploy
+/// stays a client-side `nockd deploy`. Requires the manifest to be readable on this machine.
+async fn reload(
+    State(d): State<Arc<Daemon>>,
+    Path(name): Path<String>,
+) -> Result<Json<OkResponse>, ApiError> {
+    let app = d
+        .registry
+        .get_app(&name)?
+        .ok_or_else(|| ApiError::not_found(&name))?;
+    let manifest_path = app.manifest_path.ok_or_else(|| {
+        ApiError::bad_request(
+            "this app was not deployed from a manifest, so there's nothing to reload — \
+             redeploy with `nockd deploy -f nockd.toml` to enable Reload",
+        )
+    })?;
+    let manifest = crate::config::DeployManifest::load(std::path::Path::new(&manifest_path))
+        .map_err(|e| {
+            ApiError::bad_request(&format!(
+                "could not read manifest {manifest_path}: {e} (is it still on this machine?)"
+            ))
+        })?
+        .deploy;
+    d.registry.update_app_config(
+        &name,
+        manifest.endpoint.as_deref(),
+        &manifest.restart,
+        &manifest.args,
+        manifest.health_addr.as_deref(),
+        manifest.status.cmd.as_deref(),
+        manifest.status.label.as_deref(),
+        manifest.port,
+    )?;
+    d.registry.set_desired(&name, "running")?;
+    d.supervisor.request_restart(&name);
+    d.registry
+        .add_event(&name, "reload", "manifest re-read; config re-applied")?;
     d.reconcile();
     Ok(Json(OkResponse { ok: true }))
 }
@@ -319,6 +369,13 @@ impl ApiError {
         ApiError {
             status: StatusCode::NOT_FOUND,
             message: format!("no such app: {name}"),
+        }
+    }
+
+    fn bad_request(message: &str) -> Self {
+        ApiError {
+            status: StatusCode::BAD_REQUEST,
+            message: message.to_string(),
         }
     }
 }

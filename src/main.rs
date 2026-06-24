@@ -63,6 +63,15 @@ async fn main() -> Result<()> {
             no_attest,
             args,
         } => {
+            // Record the manifest's absolute path so the daemon can re-read it for "Reload"
+            // (the daemon runs elsewhere/with a different cwd, so a relative path is useless).
+            let manifest_path: Option<String> = manifest.as_ref().map(|p| {
+                std::fs::canonicalize(p)
+                    .unwrap_or_else(|_| p.clone())
+                    .to_string_lossy()
+                    .into_owned()
+            });
+
             // A manifest supplies all config; otherwise use the flags.
             let (name, project, bin_target, bin, jam, endpoint, port, health_addr, status_cmd, status_label, restart, target, args) =
                 if let Some(mpath) = manifest {
@@ -158,6 +167,7 @@ async fn main() -> Result<()> {
                 status_cmd,
                 status_label,
                 port,
+                manifest_path,
                 provenance,
                 attestation: attestation_json,
             };
@@ -357,6 +367,11 @@ async fn main() -> Result<()> {
         Commands::Restart { name } => {
             Client::new(&cli.host, cli.port).action(&name, "restart").await?;
             println!("restarted {name}");
+        }
+
+        Commands::Reload { name } => {
+            Client::new(&cli.host, cli.port).action(&name, "reload").await?;
+            println!("reloaded {name} (manifest re-read; config re-applied)");
         }
 
         Commands::Stop { name } => {
