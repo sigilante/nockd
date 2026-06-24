@@ -1,0 +1,23 @@
+# Declarative deploy manifest for token-price (DESIGN §7.2).
+#   nockd deploy -f nockd.toml   &&   nockd restart token-price
+#
+# project = "." builds the artifact with the real client-side toolchain (nockup), exercising
+# DESIGN principle 7's build/run split, rather than shipping a prebuilt --bin/--jam.
+# token-price is single-bin, so no bin_target is needed (artifact is target/release/token-price
+# + out.jam).
+[deploy]
+app      = "token-price"
+project  = "."
+restart  = "always"
+
+# No endpoint-by-name: the data source is the fixed DexScreener public HTTP API
+# (hardcoded in the binary), not a Nockchain RPC. --port sets the HTTP listen port
+# (default 8086).
+args     = ["--port", "8086"]
+
+# Status metric: nockd runs this every few seconds with the ANSI- and NUL-stripped recent
+# log on stdin and cwd = the app's state dir. Our log line `metric: requests=<N>` makes this
+# a one-line grep, surfacing the cumulative lookup count as the REQ column in `nockd ps`.
+[deploy.status]
+label = "REQ"
+cmd   = "grep -oE 'requests=[0-9]+' | tail -1 | grep -oE '[0-9]+'"

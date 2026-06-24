@@ -1,0 +1,54 @@
+[package]
+name = "token-price"
+version = "0.1.0"
+edition = "2021"
+authors = ["sigilante"]
+description = "HTTP API: GET /price/<token> returns the live USD price of a Base token, read from DexScreener."
+
+[[bin]]
+name = "token-price"
+path = "src/main.rs"
+
+[dependencies]
+# NockVM / NockApp runtime. Pinned to the same nockchain rev as balance-api so the kernel
+# boot path is consistent. token-price never touches the chain (its data source is the
+# DexScreener public HTTP API), but it still boots the `basic` template kernel from out.jam
+# to be a valid supervised NockApp the way nockd expects.
+nockapp = { git = "https://github.com/nockchain/nockchain.git", rev = "6d29078e69b64febabe3d8d20a64c06b969a16ed" }
+nockvm = { git = "https://github.com/nockchain/nockchain.git", rev = "6d29078e69b64febabe3d8d20a64c06b969a16ed" }
+nockvm_macros = { git = "https://github.com/nockchain/nockchain.git", rev = "6d29078e69b64febabe3d8d20a64c06b969a16ed" }
+
+# Common dependencies for NockApps
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+anyhow = "1.0"
+bytes = "1.5.0"
+tokio = { version = "1.32", features = [
+  "fs",
+  "io-util",
+  "macros",
+  "net",
+  "rt-multi-thread",
+  "rt",
+  "signal",
+  "time",
+] }
+tokio-util = "0.7.11"
+tracing = "0.1.41"
+
+# Pure-Rust HTTP server. We serve HTTP directly in Rust on each request; the Hoon kernel
+# stays trivial (just makes us a valid supervised NockApp).
+axum = "0.7"
+
+# HTTP client for calling DexScreener over https. rustls TLS backend (we install the ring
+# provider explicitly in main; see below). json feature deserializes the response directly.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+# The nockchain dep graph enables BOTH rustls crypto providers (ring + aws-lc-rs), so
+# rustls cannot auto-select one and panics on first TLS use. We pick `ring` explicitly and
+# install it as the process default at startup (see main.rs).
+rustls = { version = "0.23", features = ["ring"] }
+
+[build-dependencies]
+# Build script dependencies if needed

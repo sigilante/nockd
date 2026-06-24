@@ -1,0 +1,9 @@
+[package]
+name = "token-price"
+version = "0.1.0"
+description = "HTTP API: GET /price/<token> returns the live USD price of a Base token from DexScreener."
+authors = ["sigilante"]
+license = "MIT"
+template = "basic"
+
+[dependencies]
