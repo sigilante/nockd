@@ -65,8 +65,11 @@ impl Paths {
     }
 }
 
-/// Remove ANSI/VT100 CSI escape sequences (e.g. `\x1b[32m`). Apps like nockchain emit color
-/// even when piped; we strip for the status-command stdin and the TUI log pane.
+/// Remove ANSI/VT100 CSI escape sequences (e.g. `\x1b[32m`) and NUL bytes. Apps like
+/// nockchain emit color even when piped, and the kernel-boot log contains NULs — which make
+/// BSD grep (macOS) treat the stream as binary and silently suppress `-o`, so a status recipe
+/// would produce blank output. Stripping here makes the status-command stdin and the TUI log
+/// clean and grep-friendly on every platform.
 pub fn strip_ansi(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut chars = s.chars().peekable();
@@ -81,7 +84,7 @@ pub fn strip_ansi(s: &str) -> String {
                     }
                 }
             }
-        } else {
+        } else if c != '\0' {
             out.push(c);
         }
     }

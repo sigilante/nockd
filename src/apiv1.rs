@@ -152,7 +152,8 @@ pub async fn logs_sse(State(d): State<Arc<Daemon>>, Path(name): Path<String>) ->
         let lines: Vec<&str> = seed.lines().collect();
         let start = lines.len().saturating_sub(200);
         for line in &lines[start..] {
-            yield Ok::<Event, Infallible>(Event::default().data(*line));
+            // Strip NUL bytes (kernel-boot logs contain them); keep ANSI so the panel colors.
+            yield Ok::<Event, Infallible>(Event::default().data(line.replace('\0', "")));
         }
 
         let mut tick = tokio::time::interval(Duration::from_millis(700));
@@ -168,7 +169,7 @@ pub async fn logs_sse(State(d): State<Arc<Daemon>>, Path(name): Path<String>) ->
                     let mut buf = String::new();
                     if f.read_to_string(&mut buf).await.is_ok() {
                         for line in buf.lines() {
-                            yield Ok::<Event, Infallible>(Event::default().data(line));
+                            yield Ok::<Event, Infallible>(Event::default().data(line.replace('\0', "")));
                         }
                         offset = len;
                     }

@@ -96,9 +96,15 @@ fn parse_project_name(manifest_text: &str) -> Option<String> {
 }
 
 fn run_nockup_build(project_dir: &Path) -> Result<()> {
+    // `nockup project build` with no arg, run inside the project dir, interprets the package
+    // name as a subdirectory (looks for <dir>/<name>) and fails. Pass the absolute project
+    // path explicitly, from the parent, so nockup resolves it unambiguously. (project_dir is
+    // canonicalized by build_project.)
+    let parent = project_dir.parent().unwrap_or(project_dir);
     let status = Command::new("nockup")
         .args(["project", "build"])
-        .current_dir(project_dir)
+        .arg(project_dir)
+        .current_dir(parent)
         .status()
         .context(
             "failed to run `nockup` — is the toolchain installed and on PATH? \
