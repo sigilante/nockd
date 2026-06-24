@@ -1,0 +1,18 @@
+# TLS apps only (anything that opens https://, e.g. dialing rpc.nockchain.net).
+#
+# Problem: two rustls crypto providers (ring + aws-lc-rs) end up in the dependency graph and
+# rustls PANICS on the first TLS handshake ("no process-level CryptoProvider available").
+#
+# Fix, step 1 — paste this into [dependencies] in your Cargo.toml to force one provider:
+
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
+
+# Fix, step 2 — install it once at the very top of main(), before any TLS:
+#
+#     fn main() {
+#         let _ = rustls::crypto::ring::default_provider().install_default();
+#         // … rest of main
+#     }
+#
+# (Match the rustls version to whatever tonic/nockapp-grpc pull in; `cargo tree -i rustls`
+#  shows it. nockd itself is unaffected — this is purely the app graph.)

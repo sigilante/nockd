@@ -1,0 +1,5 @@
+# Pin the Rust toolchain the pinned nockchain rev needs. Without this, nockup builds with the
+# ambient toolchain and fails with a cryptic `error[E0658]` about `cold_path` from nockvm.
+# Keep this file in your project root.
+[toolchain]
+channel = "nightly-2026-04-03"
