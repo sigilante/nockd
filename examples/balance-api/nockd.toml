@@ -1,0 +1,25 @@
+# Declarative deploy manifest for balance-api (DESIGN §7.2).
+#   nockd deploy -f nockd.toml   &&   nockd restart balance-api
+#
+# project = "." builds the artifact with the real client-side toolchain (nockup), exercising
+# DESIGN principle 7's build/run split, rather than shipping a prebuilt --bin/--jam.
+# balance-api is single-bin, so no bin_target is needed (artifact is target/release/balance-api
+# + out.jam).
+[deploy]
+app      = "balance-api"
+project  = "."
+restart  = "always"
+
+# Endpoint-by-name (DESIGN §5.3): nockd resolves "mainnet-rpc" from its endpoint registry
+# and injects the URL — substituting {endpoint} in args and setting NOCKD_ENDPOINT_URL.
+# Chain access is READ-ONLY (the public wallet_get_balance gRPC). --port sets the HTTP
+# listen port (default 8082).
+endpoint = "mainnet-rpc"
+args     = ["--endpoint", "{endpoint}", "--port", "8082"]
+
+# Status metric: nockd runs this every few seconds with the ANSI- and NUL-stripped recent
+# log on stdin and cwd = the app's state dir. Our log line `metric: requests=<N>` makes this
+# a one-line grep, surfacing the cumulative lookup count as the REQ column in `nockd ps`.
+[deploy.status]
+label = "REQ"
+cmd   = "grep -oE 'requests=[0-9]+' | tail -1 | grep -oE '[0-9]+'"

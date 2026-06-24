@@ -1,0 +1,53 @@
+[package]
+name = "balance-api"
+version = "0.1.0"
+edition = "2021"
+authors = ["sigilante"]
+description = "HTTP explorer backend: GET /balance/<pubkey> returns the pubkey's balance read live from Nockchain over gRPC."
+
+[[bin]]
+name = "balance-api"
+path = "src/main.rs"
+
+[dependencies]
+# NockVM / NockApp runtime. Pinned to a nockchain rev that has the v2 public_nockchain
+# gRPC client (the `grpc` template's older pin 485e914 predates it). All four crates share
+# one rev so the runtime and the gRPC client come from one consistent source tree.
+nockapp = { git = "https://github.com/nockchain/nockchain.git", rev = "6d29078e69b64febabe3d8d20a64c06b969a16ed" }
+nockvm = { git = "https://github.com/nockchain/nockchain.git", rev = "6d29078e69b64febabe3d8d20a64c06b969a16ed" }
+nockvm_macros = { git = "https://github.com/nockchain/nockchain.git", rev = "6d29078e69b64febabe3d8d20a64c06b969a16ed" }
+
+# The Nockchain public gRPC client (v2). PublicNockchainGrpcClient::wallet_get_balance()
+# returns the per-note UTXO set we sum into a total balance (nicks).
+nockapp-grpc = { git = "https://github.com/nockchain/nockchain.git", rev = "6d29078e69b64febabe3d8d20a64c06b969a16ed" }
+
+# Common dependencies for NockApps
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+anyhow = "1.0"
+bytes = "1.5.0"
+tokio = { version = "1.32", features = [
+  "fs",
+  "io-util",
+  "macros",
+  "net",
+  "rt-multi-thread",
+  "rt",
+  "signal",
+  "time",
+] }
+tokio-util = "0.7.11"
+tracing = "0.1.41"
+
+# Pure-Rust HTTP server. The chain read is done in Rust on each request; the Hoon kernel
+# stays trivial (just makes us a valid supervised NockApp).
+axum = "0.7"
+
+# The nockchain dep graph enables BOTH rustls crypto providers (ring + aws-lc-rs), so
+# rustls cannot auto-select one and panics on first TLS use. We pick `ring` explicitly and
+# install it as the process default at startup (see main.rs).
+rustls = { version = "0.23", features = ["ring"] }
+
+[build-dependencies]
+# Build script dependencies if needed
