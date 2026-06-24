@@ -60,6 +60,10 @@ const statusClass = (s) => (STATUSES.includes(s) ? s : 'stopped');
 const glyph = (s) => `<span class="glyph ${statusClass(s)}"></span>`;
 const shortHash = (h) => (h ? `${h.slice(0, 4)}…${h.slice(-2)}` : '—');
 const metricStr = (a) => (a.status_line ? `${a.status_label ? a.status_label + ' ' : ''}${a.status_line}` : '');
+// Build attestation indicator (DESIGN VERIFY): verified ● blue, drift ▼ red, unverified ■ ink.
+const vfy = (v) => v === 'verified' ? `<span class="vfy ok">✓ verified</span>`
+  : v === 'drift' ? `<span class="vfy bad">▼ drift</span>`
+  : `<span class="vfy muted">unverified</span>`;
 
 function fmtUptime(s) {
   if (s == null) return '—';
@@ -137,7 +141,7 @@ function fleetView() {
   function fleetTable(apps) {
     const wrap = $(`<table class="table"><thead><tr>
       <th></th><th>App</th><th>Artifact</th><th>Endpoint</th><th>Uptime</th>
-      <th>Rst</th><th>Health</th><th>Metric</th><th>Status</th></tr></thead><tbody></tbody></table>`);
+      <th>Rst</th><th>Health</th><th>Verified</th><th>Metric</th><th>Status</th></tr></thead><tbody></tbody></table>`);
     const tb = wrap.querySelector('tbody');
     if (!apps.length) { app.append($(`<div class="empty-tile">No apps deployed. Use <b>nockd deploy</b>.</div>`)); return wrap; }
     for (const a of apps) {
@@ -151,6 +155,7 @@ function fleetView() {
         <td class="mono">${fmtUptime(a.uptime_s)}</td>
         <td class="mono">${rst}</td>
         <td class="mono muted">${esc(a.health)}</td>
+        <td>${vfy(a.verified)}</td>
         <td class="mono">${a.status_line ? esc(metricStr(a)) : '—'}</td>
         <td><span class="status-word ${statusClass(a.status)}">${esc(a.status)}</span></td>
       </tr>`);
@@ -173,7 +178,7 @@ function fleetView() {
           <div class="tname">${esc(a.name)}</div>
           <div class="meta">${esc(a.artifact_hash ? a.artifact_hash.slice(0, 18) + '…' : '—')}</div>
           <div class="meta">${esc(a.endpoint_name || 'no endpoint')}</div>
-          <div class="tfoot"><span>up ${fmtUptime(a.uptime_s)}</span><span>${esc(a.health)}</span></div>
+          <div class="tfoot"><span>up ${fmtUptime(a.uptime_s)}</span>${vfy(a.verified)}</div>
         </div>
       </div>`);
       t.onclick = () => location.hash = `#/app/${encodeURIComponent(a.name)}`;

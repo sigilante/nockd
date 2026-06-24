@@ -85,6 +85,39 @@ impl Client {
         ))
     }
 
+    pub async fn trust_list(&self) -> Result<Vec<String>> {
+        let resp = self
+            .http
+            .get(format!("{}/api/v1/trust", self.base))
+            .send()
+            .await
+            .context("connecting to daemon")?;
+        Ok(Self::check(resp).await?.json().await?)
+    }
+
+    pub async fn trust_add(&self, pubkey: &str) -> Result<()> {
+        let resp = self
+            .http
+            .post(format!("{}/api/v1/trust", self.base))
+            .json(&serde_json::json!({ "pubkey": pubkey }))
+            .send()
+            .await
+            .context("connecting to daemon")?;
+        Self::check(resp).await?;
+        Ok(())
+    }
+
+    pub async fn trust_remove(&self, pubkey: &str) -> Result<()> {
+        let resp = self
+            .http
+            .delete(format!("{}/api/v1/trust/{pubkey}", self.base))
+            .send()
+            .await
+            .context("connecting to daemon")?;
+        Self::check(resp).await?;
+        Ok(())
+    }
+
     pub async fn endpoints(&self) -> Result<serde_json::Value> {
         let resp = self
             .http

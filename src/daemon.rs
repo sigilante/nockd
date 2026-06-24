@@ -28,6 +28,10 @@ impl Daemon {
     pub fn new(paths: Paths) -> Result<Arc<Self>> {
         let lock = acquire_single_daemon_lock(&paths.root.join("nockd.lock"))?;
         let registry = Registry::open(&paths.db)?;
+        // Trust this host's own builder key (self-attestations are verified by default).
+        if let Ok(key) = crate::attest::load_key(&paths.builder_key()) {
+            let _ = registry.add_trusted_builder(&crate::attest::pubkey_hex(&key));
+        }
         let store = Store::new(paths.artifacts.clone());
         let supervisor = Supervisor::new(paths.clone());
         Ok(Arc::new(Daemon {

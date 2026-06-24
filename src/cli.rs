@@ -70,6 +70,12 @@ pub enum Commands {
         /// Target triple recorded in the artifact identity.
         #[arg(long, default_value = env!("NOCKD_DEFAULT_TARGET"))]
         target: String,
+        /// Attach an external build attestation (JSON) instead of self-signing.
+        #[arg(long)]
+        attestation: Option<PathBuf>,
+        /// Don't auto-sign a self-attestation even if a builder key exists.
+        #[arg(long)]
+        no_attest: bool,
         /// Arguments passed through to the app process.
         #[arg(last = true)]
         args: Vec<String>,
@@ -77,6 +83,12 @@ pub enum Commands {
 
     /// List deployed apps and their status.
     Ps,
+
+    /// Manage trusted builder keys (whose attestations count as verified).
+    Trust {
+        #[command(subcommand)]
+        action: TrustAction,
+    },
 
     /// Stop all apps (keeps them deployed; daemon stays up).
     Down,
@@ -137,6 +149,18 @@ pub enum Commands {
 
     /// Start a stopped app.
     Start { name: String },
+}
+
+#[derive(Subcommand)]
+pub enum TrustAction {
+    /// Trust a builder public key.
+    Add { pubkey: String },
+    /// List trusted builder keys.
+    #[command(alias = "ls")]
+    List,
+    /// Stop trusting a builder key.
+    #[command(alias = "rm")]
+    Remove { pubkey: String },
 }
 
 #[derive(Subcommand)]

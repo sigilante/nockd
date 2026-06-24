@@ -41,6 +41,9 @@ pub struct DeployRequest {
     pub status_label: Option<String>,
     #[serde(default)]
     pub provenance: Option<String>,
+    /// Optional build attestation (JSON) — a signed statement binding these hashes.
+    #[serde(default)]
+    pub attestation: Option<String>,
 }
 
 fn default_restart() -> String {
@@ -63,6 +66,7 @@ pub struct AppStatus {
     pub endpoint: Option<String>,
     pub restart_policy: String,
     pub status_label: Option<String>,
+    pub verified: String,
     pub runtime: Option<RuntimeStatus>,
 }
 
@@ -88,6 +92,8 @@ pub fn router(daemon: Arc<Daemon>) -> Router {
         .route("/api/v1/events", get(apiv1::events_sse)) // SSE (follow)
         .route("/api/v1/down", post(down))
         .route("/api/v1/up", post(up))
+        .route("/api/v1/trust", get(trust_list).post(trust_add))
+        .route("/api/v1/trust/:pubkey", axum::routing::delete(trust_remove))
         .route(
             "/api/v1/endpoints",
             get(apiv1::list_endpoints).post(apiv1::add_endpoint),
@@ -117,6 +123,7 @@ async fn list_apps(State(d): State<Arc<Daemon>>) -> Result<Json<Vec<AppStatus>>,
                 endpoint: a.endpoint,
                 restart_policy: a.restart_policy,
                 status_label: a.status_label,
+                verified: a.verified_status.clone().unwrap_or_else(|| "unverified".into()),
             }
         })
         .collect();
@@ -136,6 +143,26 @@ async fn deploy(
 
     let rec = d.store.put(jam.as_deref(), &bin, &req.target_triple)?;
     d.registry.put_artifact(&rec, req.provenance.as_deref())?;
+
+    // Verify the attestation (if any) and record the artifact's verification status.
+    let (verified, builder) = match &req.attestation {
+        Some(json) => match serde_json::from_str::<crate::attest::Attestation>(json) {
+            Ok(att) => crate::attest::assess(&att, &rec.artifact_hash, &rec.kernel_hash, |b| {
+                d.registry.is_trusted_builder(b)
+            }),
+            Err(_) => ("drift".to_string(), None), // malformed attestation
+        },
+        None => ("unverified".to_string(), None),
+    };
+    tracing::info!(
+        has_attestation = req.attestation.is_some(),
+        artifact = %&rec.artifact_hash[..16.min(rec.artifact_hash.len())],
+        verified = %verified,
+        builder = builder.as_deref().unwrap_or("-"),
+        "deploy verification"
+    );
+    d.registry
+        .set_artifact_verification(&rec.artifact_hash, &verified, builder.as_deref())?;
 
     let state_path = d.paths.state_dir(&req.name);
     d.registry.upsert_app(
@@ -240,6 +267,31 @@ async fn down(State(d): State<Arc<Daemon>>) -> Result<Json<serde_json::Value>, A
 
 async fn up(State(d): State<Arc<Daemon>>) -> Result<Json<serde_json::Value>, ApiError> {
     fleet_set(&d, "running").await
+}
+
+#[derive(Deserialize)]
+struct TrustReq {
+    pubkey: String,
+}
+
+async fn trust_list(State(d): State<Arc<Daemon>>) -> Result<Json<Vec<String>>, ApiError> {
+    Ok(Json(d.registry.list_trusted_builders()?))
+}
+
+async fn trust_add(
+    State(d): State<Arc<Daemon>>,
+    Json(req): Json<TrustReq>,
+) -> Result<Json<OkResponse>, ApiError> {
+    d.registry.add_trusted_builder(&req.pubkey)?;
+    Ok(Json(OkResponse { ok: true }))
+}
+
+async fn trust_remove(
+    State(d): State<Arc<Daemon>>,
+    Path(pubkey): Path<String>,
+) -> Result<Json<OkResponse>, ApiError> {
+    d.registry.remove_trusted_builder(&pubkey)?;
+    Ok(Json(OkResponse { ok: true }))
 }
 
 async fn events(State(d): State<Arc<Daemon>>) -> Result<Json<Vec<EventRow>>, ApiError> {

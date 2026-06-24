@@ -95,6 +95,28 @@ cmd   = "grep -oE 'block_height=[0-9]+' | tail -1 | grep -oE '[0-9]+'"
 nockd deploy -f nockd.toml
 ```
 
+### Verified deploys (attestations)
+
+A deploy carries a **build attestation** — a signed statement binding the artifact's hashes
+to a builder identity (ed25519). The daemon verifies it (signature + hashes + trusted
+builder) and shows each app as **verified / unverified / drift** in `ps`, the API, and the
+dashboard.
+
+```sh
+nockd key gen                 # create your builder identity (once)
+nockd deploy myapp --bin …    # auto-signs a self-attestation → verified
+nockd deploy myapp --bin … --no-attest          # → unverified
+nockd deploy myapp --bin … --attestation a.json # attach someone else's attestation
+
+nockd trust add <pubkey>      # trust another builder (e.g. an org/release key)
+nockd trust ls
+```
+
+The daemon trusts its own builder key by default, so your self-built apps show **verified**.
+For a binary like nockchain, this is a *supply-chain* attestation ("built by a trusted
+builder"); the deepest level — reproducible rebuild + compare (mirroring typhoon's
+`generate --check`) — is a toolchain-side follow-up.
+
 ### Endpoints
 
 Named Nockchain RPC targets, with live reachability + lag. Apps reference an endpoint by

@@ -49,6 +49,27 @@ impl Store {
         self.bin_path(artifact_hash).exists() && self.jam_path(artifact_hash).exists()
     }
 
+    /// Compute the content-addressed identity of an artifact (DESIGN OQ2): `kernel_hash` =
+    /// BLAKE3(out.jam) (empty when the kernel is embedded), `artifact_hash` =
+    /// BLAKE3([jam ‖] bin ‖ triple). Used by both the store and the client (to sign an
+    /// attestation over the same hashes the daemon will compute).
+    pub fn compute_hashes(jam: Option<&[u8]>, bin: &[u8], target_triple: &str) -> ArtifactRecord {
+        let kernel_hash = jam
+            .map(|j| blake3::hash(j).to_hex().to_string())
+            .unwrap_or_default();
+        let mut hasher = blake3::Hasher::new();
+        if let Some(j) = jam {
+            hasher.update(j);
+        }
+        hasher.update(bin);
+        hasher.update(target_triple.as_bytes());
+        ArtifactRecord {
+            artifact_hash: hasher.finalize().to_hex().to_string(),
+            kernel_hash,
+            target_triple: target_triple.to_string(),
+        }
+    }
+
     /// Store an artifact, returning its record. `jam` is optional (binary-only artifacts
     /// embed their kernel). Idempotent: a hash already present is a no-op (dedup, DESIGN §3).
     pub fn put(
@@ -57,23 +78,8 @@ impl Store {
         bin: &[u8],
         target_triple: &str,
     ) -> Result<ArtifactRecord> {
-        let kernel_hash = jam
-            .map(|j| blake3::hash(j).to_hex().to_string())
-            .unwrap_or_default();
-
-        let mut hasher = blake3::Hasher::new();
-        if let Some(j) = jam {
-            hasher.update(j);
-        }
-        hasher.update(bin);
-        hasher.update(target_triple.as_bytes());
-        let artifact_hash = hasher.finalize().to_hex().to_string();
-
-        let record = ArtifactRecord {
-            artifact_hash: artifact_hash.clone(),
-            kernel_hash,
-            target_triple: target_triple.to_string(),
-        };
+        let record = Self::compute_hashes(jam, bin, target_triple);
+        let artifact_hash = record.artifact_hash.clone();
 
         if self.has(&artifact_hash) {
             return Ok(record);

@@ -32,6 +32,8 @@ pub struct AppRow {
     /// app's custom status line (e.g. block height for a nockchain observer).
     pub status_cmd: Option<String>,
     pub status_label: Option<String>,
+    /// Verification status of the current artifact (verified | unverified | drift).
+    pub verified_status: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -60,11 +62,17 @@ impl Registry {
             r#"
             PRAGMA journal_mode = WAL;
             CREATE TABLE IF NOT EXISTS artifact (
-                hash          TEXT PRIMARY KEY,
-                kernel_hash   TEXT NOT NULL,
-                target_triple TEXT NOT NULL,
-                created_at    INTEGER NOT NULL,
-                provenance    TEXT
+                hash            TEXT PRIMARY KEY,
+                kernel_hash     TEXT NOT NULL,
+                target_triple   TEXT NOT NULL,
+                created_at      INTEGER NOT NULL,
+                provenance      TEXT,
+                verified_status TEXT,   -- verified | unverified | drift
+                builder         TEXT    -- attesting builder pubkey, if any
+            );
+            CREATE TABLE IF NOT EXISTS trusted_builder (
+                pubkey   TEXT PRIMARY KEY,
+                added_at INTEGER NOT NULL
             );
             CREATE TABLE IF NOT EXISTS app (
                 name           TEXT PRIMARY KEY,
@@ -101,6 +109,8 @@ impl Registry {
             "ALTER TABLE app ADD COLUMN admin_addr TEXT",
             "ALTER TABLE app ADD COLUMN status_cmd TEXT",
             "ALTER TABLE app ADD COLUMN status_label TEXT",
+            "ALTER TABLE artifact ADD COLUMN verified_status TEXT",
+            "ALTER TABLE artifact ADD COLUMN builder TEXT",
         ] {
             let _ = conn.execute(ddl, []);
         }
@@ -165,7 +175,7 @@ impl Registry {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT a.name, a.artifact_hash, ar.kernel_hash, a.endpoint, a.restart_policy,
-                    a.args, a.state_path, a.desired_status, a.created_at, a.updated_at, a.admin_addr, a.status_cmd, a.status_label
+                    a.args, a.state_path, a.desired_status, a.created_at, a.updated_at, a.admin_addr, a.status_cmd, a.status_label, ar.verified_status
              FROM app a LEFT JOIN artifact ar ON ar.hash = a.artifact_hash
              WHERE a.name = ?1",
         )?;
@@ -179,7 +189,7 @@ impl Registry {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT a.name, a.artifact_hash, ar.kernel_hash, a.endpoint, a.restart_policy,
-                    a.args, a.state_path, a.desired_status, a.created_at, a.updated_at, a.admin_addr, a.status_cmd, a.status_label
+                    a.args, a.state_path, a.desired_status, a.created_at, a.updated_at, a.admin_addr, a.status_cmd, a.status_label, ar.verified_status
              FROM app a LEFT JOIN artifact ar ON ar.hash = a.artifact_hash
              ORDER BY a.name",
         )?;
@@ -206,7 +216,57 @@ impl Registry {
             admin_addr: row.get(10)?,
             status_cmd: row.get(11)?,
             status_label: row.get(12)?,
+            verified_status: row.get(13)?,
         })
+    }
+
+    /// Record the verification result for an artifact (set at deploy time). Verified is
+    /// sticky: a content-addressed artifact that already has a valid attestation stays
+    /// verified even if a later deploy of the same bytes attaches no/another attestation.
+    pub fn set_artifact_verification(
+        &self,
+        hash: &str,
+        status: &str,
+        builder: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE artifact SET verified_status=?2, builder=?3
+             WHERE hash=?1 AND NOT (COALESCE(verified_status,'')='verified' AND ?2 != 'verified')",
+            rusqlite::params![hash, status, builder],
+        )?;
+        Ok(())
+    }
+
+    pub fn add_trusted_builder(&self, pubkey: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR IGNORE INTO trusted_builder (pubkey, added_at) VALUES (?1, ?2)",
+            rusqlite::params![pubkey, now_secs()],
+        )?;
+        Ok(())
+    }
+
+    pub fn remove_trusted_builder(&self, pubkey: &str) -> Result<usize> {
+        let conn = self.conn.lock().unwrap();
+        Ok(conn.execute("DELETE FROM trusted_builder WHERE pubkey=?1", [pubkey])?)
+    }
+
+    pub fn list_trusted_builders(&self) -> Result<Vec<String>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT pubkey FROM trusted_builder ORDER BY added_at")?;
+        let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+        rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+    }
+
+    pub fn is_trusted_builder(&self, pubkey: &str) -> bool {
+        let conn = self.conn.lock().unwrap();
+        conn.query_row(
+            "SELECT 1 FROM trusted_builder WHERE pubkey=?1",
+            [pubkey],
+            |_| Ok(()),
+        )
+        .is_ok()
     }
 
     pub fn add_event(&self, app_name: &str, kind: &str, detail: &str) -> Result<()> {

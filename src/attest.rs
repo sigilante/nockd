@@ -95,6 +95,31 @@ pub fn binds(att: &Attestation, artifact_hash: &str, kernel_hash: &str) -> bool 
     att.payload.artifact_hash == artifact_hash && att.payload.kernel_hash == kernel_hash
 }
 
+/// Assess an attestation against a deployed artifact, returning (status, builder):
+///   - "verified"   — signature valid, hashes bound, builder trusted.
+///   - "unverified" — signature valid + bound, but the builder isn't trusted (record it).
+///   - "drift"      — signature invalid (tamper), or the attestation is for a different
+///                    artifact (hashes don't bind).
+pub fn assess(
+    att: &Attestation,
+    artifact_hash: &str,
+    kernel_hash: &str,
+    is_trusted: impl Fn(&str) -> bool,
+) -> (String, Option<String>) {
+    match verify_signature(att) {
+        Ok(builder) => {
+            if !binds(att, artifact_hash, kernel_hash) {
+                ("drift".to_string(), Some(builder))
+            } else if is_trusted(&builder) {
+                ("verified".to_string(), Some(builder))
+            } else {
+                ("unverified".to_string(), Some(builder))
+            }
+        }
+        Err(_) => ("drift".to_string(), None),
+    }
+}
+
 // ---- Builder key management ----
 
 /// Generate a fresh builder signing key.

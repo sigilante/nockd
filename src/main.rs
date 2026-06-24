@@ -57,6 +57,8 @@ async fn main() -> Result<()> {
             status_label,
             restart,
             target,
+            attestation,
+            no_attest,
             args,
         } => {
             // A manifest supplies all config; otherwise use the flags.
@@ -98,14 +100,47 @@ async fn main() -> Result<()> {
             let bin_bytes = std::fs::read(&bin_path)
                 .with_context(|| format!("reading binary {}", bin_path.display()))?;
             let engine = base64::engine::general_purpose::STANDARD;
-            let jam_b64 = match &jam_path {
-                Some(p) => {
-                    let bytes =
-                        std::fs::read(p).with_context(|| format!("reading kernel {}", p.display()))?;
-                    Some(engine.encode(&bytes))
-                }
+            let jam_bytes: Option<Vec<u8>> = match &jam_path {
+                Some(p) => Some(
+                    std::fs::read(p).with_context(|| format!("reading kernel {}", p.display()))?,
+                ),
                 None => None,
             };
+            let jam_b64 = jam_bytes.as_ref().map(|b| engine.encode(b));
+            // Attestation: an external one if provided, else self-sign with the builder key
+            // (unless --no-attest). The client computes the same hashes the daemon will.
+            let attestation_json = if let Some(path) = attestation {
+                Some(std::fs::read_to_string(&path).with_context(|| {
+                    format!("reading attestation {}", path.display())
+                })?)
+            } else if !no_attest {
+                let key_path = config::Paths::resolve(None)?.builder_key();
+                match attest::load_key(&key_path) {
+                    Ok(key) => {
+                        let rec = store::Store::compute_hashes(
+                            jam_bytes.as_deref(),
+                            &bin_bytes,
+                            &target,
+                        );
+                        let prov = provenance
+                            .as_deref()
+                            .and_then(|p| serde_json::from_str(p).ok())
+                            .unwrap_or(serde_json::json!({}));
+                        let att = attest::create(
+                            &key,
+                            &rec.artifact_hash,
+                            &rec.kernel_hash,
+                            &target,
+                            prov,
+                        )?;
+                        Some(serde_json::to_string(&att)?)
+                    }
+                    Err(_) => None, // no builder key → no self-attestation
+                }
+            } else {
+                None
+            };
+
             let req = api::DeployRequest {
                 name: name.clone(),
                 target_triple: target,
@@ -118,6 +153,7 @@ async fn main() -> Result<()> {
                 status_cmd,
                 status_label,
                 provenance,
+                attestation: attestation_json,
             };
             let client = Client::new(&cli.host, cli.port);
             let resp = client.deploy(&req).await?;
@@ -135,8 +171,8 @@ async fn main() -> Result<()> {
                 return Ok(());
             }
             println!(
-                "{:<16} {:<10} {:<12} {:<14} {:<8} {:<20} {}",
-                "NAME", "STATE", "HEALTH", "KERNEL", "PID", "ENDPOINT", "STATUS"
+                "{:<16} {:<10} {:<10} {:<10} {:<8} {:<18} {}",
+                "NAME", "STATE", "HEALTH", "VERIFIED", "PID", "ENDPOINT", "STATUS"
             );
             for a in apps {
                 let (state, health, pid) = match &a.runtime {
@@ -147,7 +183,6 @@ async fn main() -> Result<()> {
                     ),
                     None => (a.desired_status.clone(), "unknown".into(), "—".into()),
                 };
-                let kernel = a.kernel_hash.chars().take(12).collect::<String>();
                 let status_line = a
                     .runtime
                     .as_ref()
@@ -158,11 +193,11 @@ async fn main() -> Result<()> {
                     })
                     .unwrap_or_default();
                 println!(
-                    "{:<16} {:<10} {:<12} {:<14} {:<8} {:<20} {}",
+                    "{:<16} {:<10} {:<10} {:<10} {:<8} {:<18} {}",
                     a.name,
                     state,
                     health,
-                    kernel,
+                    a.verified,
                     pid,
                     a.endpoint.unwrap_or_else(|| "—".into()),
                     status_line,
@@ -178,6 +213,30 @@ async fn main() -> Result<()> {
         Commands::Up => {
             let (changed, total) = Client::new(&cli.host, cli.port).fleet("up").await?;
             println!("started {changed} of {total} apps");
+        }
+
+        Commands::Trust { action } => {
+            let client = Client::new(&cli.host, cli.port);
+            match action {
+                cli::TrustAction::Add { pubkey } => {
+                    client.trust_add(&pubkey).await?;
+                    println!("now trusting builder {pubkey}");
+                }
+                cli::TrustAction::Remove { pubkey } => {
+                    client.trust_remove(&pubkey).await?;
+                    println!("stopped trusting {pubkey}");
+                }
+                cli::TrustAction::List => {
+                    let keys = client.trust_list().await?;
+                    if keys.is_empty() {
+                        println!("no trusted builders");
+                    } else {
+                        for k in keys {
+                            println!("{k}");
+                        }
+                    }
+                }
+            }
         }
 
         Commands::Key { action } => {

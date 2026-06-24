@@ -93,7 +93,7 @@ fn to_app_v1(row: AppRow, rt: Option<RuntimeStatus>) -> AppV1 {
         template: None,
         health,
         chain_attach: None,
-        verified: "unverified".into(),
+        verified: row.verified_status.unwrap_or_else(|| "unverified".into()),
         status_label: row.status_label,
         status_line: rt.as_ref().and_then(|r| r.status_line.clone()),
         pid: rt.as_ref().and_then(|r| r.pid),

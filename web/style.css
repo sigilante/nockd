@@ -114,6 +114,10 @@ tr.idle .mono { color: var(--ink-muted); }
 .status-word.degraded { color: #6b5410; }
 .status-word.crashing { color: var(--red); }
 .status-word.stopped { color: var(--ink-muted); }
+.vfy { font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; }
+.vfy.ok { color: var(--blue); }
+.vfy.bad { color: var(--red); }
+.vfy.muted { color: var(--ink-muted); }
 
 /* ---- Status glyphs (CSS-drawn) ---- */
 .glyph { display: inline-block; vertical-align: middle; }
