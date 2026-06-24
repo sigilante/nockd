@@ -135,6 +135,10 @@ pub struct DeploySection {
     /// Build mode: a project dir built via `nockup` (alternative to bin/jam).
     #[serde(default)]
     pub project: Option<PathBuf>,
+    /// For a multi-bin project, which `[[bin]]` target to ship (→ `target/release/<t>` +
+    /// `<t>.jam`). Omit for a single-bin project (`<package>` + `out.jam`).
+    #[serde(default)]
+    pub bin_target: Option<String>,
     /// Prebuilt mode: the wrapper binary, and an optional kernel (omit for binary-only apps).
     #[serde(default)]
     pub bin: Option<PathBuf>,

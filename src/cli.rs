@@ -45,6 +45,10 @@ pub enum Commands {
         /// Project directory to build with `nockup`.
         #[arg(long)]
         project: Option<PathBuf>,
+        /// For a multi-bin project, which `[[bin]]` target to ship (e.g. `listen` → builds
+        /// `target/release/listen` + `listen.jam`). Omit for single-bin (`out.jam`).
+        #[arg(long)]
+        bin_target: Option<String>,
         /// Path to a prebuilt Rust wrapper binary.
         #[arg(long)]
         bin: Option<PathBuf>,

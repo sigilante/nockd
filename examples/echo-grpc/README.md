@@ -64,13 +64,12 @@ nockup project build echo-grpc
 
 This produces `echo-grpc/target/release/{listen,talk}` and — because there are **two
 binaries** — `echo-grpc/listen.jam` and `echo-grpc/talk.jam` (there is **no** `out.jam` in
-multi-bin mode; see RECIPE.md). For the prebuilt deploy, copy the server kernel to `out.jam`:
-
-```sh
-cp echo-grpc/listen.jam echo-grpc/out.jam
-```
+multi-bin mode; see RECIPE.md).
 
 ## Deploy
+
+The intended path is project-mode with `nockd.toml`, which names `bin_target = "listen"` so
+nockd builds via nockup and ships `target/release/listen` + `listen.jam`:
 
 ```sh
 export PATH="$PATH:/path/to/nockd/target/release"
@@ -78,12 +77,14 @@ nockd serve &        # if not already running
 nockd key gen        # once: builder identity → "verified"
 
 cd examples/echo-grpc
-cp listen.jam out.jam        # stage the server kernel as out.jam
+nockd deploy -f nockd.toml
+```
 
-# Prebuilt deploy (the proven path; project-mode is broken — see RECIPE.md):
+Equivalent without the manifest — note `--bin-target` selects the bin, no `out.jam` copy:
+
+```sh
 nockd deploy echo-grpc \
-  --bin ./target/release/listen \
-  --jam ./out.jam \
+  --project . --bin-target listen \
   --restart always \
   --health-addr 127.0.0.1:5561 \
   --status-label POKES \
@@ -91,10 +92,8 @@ nockd deploy echo-grpc \
   -- --grpc-addr 127.0.0.1:5561
 ```
 
-> **Heads-up (see RECIPE.md):** `nockd.toml` ships with `project = "."` (real-toolchain build
-> via `nockup`) as the intended UX, but **project-mode deploy is currently broken** (`nockd`
-> invokes `nockup project build` in a way `nockup` rejects — details in
-> `chain-watch/RECIPE.md` ROUGH EDGE 7). Deploy the prebuilt `--bin`/`--jam` artifact above.
+To deploy a prebuilt artifact instead, stage the server kernel as `out.jam`
+(`cp listen.jam out.jam`) and pass `--bin ./target/release/listen --jam ./out.jam`.
 
 ## The poke → peek roundtrip (the proof)
 

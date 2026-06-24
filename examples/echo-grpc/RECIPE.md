@@ -4,7 +4,7 @@ This is the honest build/deploy transcript for `echo-grpc`, a NockApp that demon
 **private NockApp gRPC surface** with a **poke → peek echo roundtrip**. It is a companion to
 [`../chain-watch/RECIPE.md`](../chain-watch/RECIPE.md) — read that first; it covers the
 shared gotchas (nockup nesting, the `rev=""` placeholder, the ambient-toolchain `cold_path`
-error, the parent-dir build invocation, the rustls double-provider panic, the broken
+error, the parent-dir build invocation, the rustls double-provider panic, the now-resolved
 project-mode deploy, and the BSD-grep / NUL-byte status-cmd issue). This file records only
 the things that are **NEW or different** for echo-grpc — almost all of them about the private
 gRPC API at rev `6d29078` and the two-binary build.
@@ -110,12 +110,14 @@ for each bin and then **renames `out.jam` to `<binname>.jam`** (verified in
 - Every bin needs its own `hoon/app/<binname>.hoon` or the build errors with
   `Hoon app file not found`. The `talk` client never boots a kernel, but you must still ship a
   trivial `hoon/app/talk.hoon` to satisfy the build.
-- For the prebuilt deploy you pass `--jam ./out.jam`, and the server reads `out.jam` at boot.
-  So **copy the server kernel into place first**: `cp listen.jam out.jam`. (`nockd` then stages
-  whatever `--jam` you give it into the app state dir as `out.jam`, which is the server's cwd —
-  confirmed in `nockd/src/store.rs::stage_jam`.) The `listen` binary also falls back to reading
-  `listen.jam` if `out.jam` is absent, so a by-hand `./target/release/listen` works from the
-  project dir too.
+- **nockd now mirrors this convention** — `bin_target = "listen"` in `nockd.toml` (or
+  `--bin-target listen`) tells project-mode build to ship `target/release/listen` + the
+  root-level `listen.jam`. Verified end-to-end: `nockd deploy -f nockd.toml` builds via nockup
+  and boots the `listen` kernel. No `out.jam` copy needed on this path.
+- For the **prebuilt** `--bin`/`--jam` path you still pass `--jam ./out.jam`, so copy the
+  server kernel into place first: `cp listen.jam out.jam`. (`nockd` stages whatever `--jam` you
+  give it into the app state dir as `out.jam`, the server's cwd — see `store.rs::stage_jam`.)
+  The `listen` binary also falls back to reading `listen.jam` if `out.jam` is absent.
 
 ---
 
@@ -175,10 +177,11 @@ that line is not yours and is expected.) After this fix, restart logs show
 
 ---
 
-## 6. Deploy (prebuilt) and the health gate
+## 6. Deploy and the health gate
 
-Project-mode is still broken (chain-watch ROUGH EDGE 7); `nockd.toml` ships `project = "."`
-as the intended UX but you deploy prebuilt:
+Project-mode now works for multi-bin (see §3); `nockd.toml` ships `project = "."` +
+`bin_target = "listen"` and `nockd deploy -f nockd.toml` is the intended path. The prebuilt
+`--bin`/`--jam` deploy below is the equivalent manual form:
 
 ```sh
 cd examples/echo-grpc

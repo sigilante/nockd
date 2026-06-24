@@ -49,6 +49,7 @@ async fn main() -> Result<()> {
             name,
             manifest,
             project,
+            bin_target,
             bin,
             jam,
             endpoint,
@@ -62,12 +63,13 @@ async fn main() -> Result<()> {
             args,
         } => {
             // A manifest supplies all config; otherwise use the flags.
-            let (name, project, bin, jam, endpoint, health_addr, status_cmd, status_label, restart, target, args) =
+            let (name, project, bin_target, bin, jam, endpoint, health_addr, status_cmd, status_label, restart, target, args) =
                 if let Some(mpath) = manifest {
                     let d = config::DeployManifest::load(&mpath)?.deploy;
                     (
                         Some(d.app),
                         d.project,
+                        d.bin_target,
                         d.bin,
                         d.jam,
                         d.endpoint,
@@ -81,14 +83,15 @@ async fn main() -> Result<()> {
                     )
                 } else {
                     (
-                        name, project, bin, jam, endpoint, health_addr, status_cmd,
+                        name, project, bin_target, bin, jam, endpoint, health_addr, status_cmd,
                         status_label, restart, target, args,
                     )
                 };
 
             let (name, bin_path, jam_path, provenance) = if let Some(proj) = project {
-                let built = buildkit::build_project(&proj)?;
-                let name = name.unwrap_or(built.name);
+                let built = buildkit::build_project(&proj, bin_target.as_deref())?;
+                // Multi-bin: default the app name to the shipped bin target, not the package.
+                let name = name.or(bin_target).unwrap_or(built.name);
                 (name, built.bin, Some(built.jam), Some(built.provenance))
             } else {
                 let name = name.context("app name required (or pass --project <dir>)")?;

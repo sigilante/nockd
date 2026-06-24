@@ -2,15 +2,16 @@
 #   nockd deploy -f nockd.toml
 #
 # project = "." is the INTENDED UX: it builds the artifact with the real client-side
-# toolchain (nockup), exercising DESIGN principle 7's build/run split. NOTE: project-mode
-# deploy is currently BROKEN on this nockd/nockup pair (nockd runs `nockup project build`
-# with no arg from inside the project dir, which nockup rejects — see RECIPE.md). The proven
-# path is the prebuilt `--bin`/`--jam` deploy documented in README.md; this manifest captures
-# the intended shape.
+# toolchain (nockup), exercising DESIGN principle 7's build/run split.
+#
+# echo-grpc is a MULTI-BIN project (listen + talk), so it follows nockup's per-bin convention:
+# `hoon/app/listen.hoon` → `target/release/listen` + `listen.jam`. `bin_target` names which one
+# to ship. nockd then locates `target/release/listen` + `listen.jam` instead of `out.jam`.
 [deploy]
-app      = "echo-grpc"
-project  = "."
-restart  = "always"
+app        = "echo-grpc"
+project    = "."
+bin_target = "listen"
+restart    = "always"
 
 # The app's private/admin gRPC address. nockd health-probes it via the tonic health service
 # the private gRPC server exposes. We also pass it to the app so the bind address and the

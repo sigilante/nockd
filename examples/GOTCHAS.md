@@ -59,6 +59,22 @@ and ships the artifact. (Earlier this was broken — nockd ran `nockup project b
 and nockup misread the package name as a subdir. Fixed: nockd passes the absolute path.)
 The prebuilt path still works too: `nockd deploy <name> --bin … --jam …`.
 
+### Multi-bin projects: name the bin target — **[nockd-fixed]**
+nockup's multi-bin convention compiles `hoon/app/<bin>.hoon` → `target/release/<bin>` +
+`<bin>.jam` per `[[bin]]` (e.g. the grpc template / echo-grpc's `listen` + `talk`) — there is
+**no `out.jam`** in multi-bin mode. A single-bin project stays `target/release/<package>` +
+`out.jam`. Since one nockd app is one process, tell nockd which bin to ship:
+
+```toml
+[deploy]
+app        = "echo-grpc"
+project    = "."
+bin_target = "listen"   # → target/release/listen + listen.jam
+```
+
+or `--bin-target listen` on the CLI. Omit it for single-bin apps. (Without it, nockd looked
+for `out.jam` and failed on multi-bin projects.)
+
 ### Log a clean, greppable metric line
 If your app has a key number (height, requests, balance), **log it on one line** like
 `metric: requests=42`. nockd's `--status-cmd` receives the **ANSI- and NUL-stripped** recent

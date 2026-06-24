@@ -32,7 +32,9 @@ struct Provenance {
 }
 
 /// Build a NockApp project via `nockup`, returning the located artifact + provenance.
-pub fn build_project(project_dir: &Path) -> Result<BuiltArtifact> {
+/// `bin_target` selects which `[[bin]]` to ship for a multi-bin project (e.g. the grpc
+/// template's `listen`/`talk`); `None` ships the single-bin default (`<package>` + `out.jam`).
+pub fn build_project(project_dir: &Path, bin_target: Option<&str>) -> Result<BuiltArtifact> {
     let project_dir = project_dir
         .canonicalize()
         .with_context(|| format!("project dir {} not found", project_dir.display()))?;
@@ -47,8 +49,16 @@ pub fn build_project(project_dir: &Path) -> Result<BuiltArtifact> {
 
     run_nockup_build(&project_dir)?;
 
-    let bin = locate_bin(&project_dir, &name)?;
-    let jam = locate_jam(&project_dir)?;
+    // nockup multi-bin convention: `hoon/app/<bin>.hoon` → `target/release/<bin>` + `<bin>.jam`
+    // (e.g. the grpc template's listen/talk). A single-bin project is `target/release/<name>`
+    // + `out.jam`. The deploy names which bin target to ship; default to the package name.
+    let bin_name = bin_target.unwrap_or(&name);
+    let bin = locate_bin(&project_dir, bin_name)?;
+    let jam_name = match bin_target {
+        Some(t) => format!("{t}.jam"),
+        None => "out.jam".to_string(),
+    };
+    let jam = locate_jam(&project_dir, &jam_name)?;
 
     let provenance = Provenance {
         manifest_file,
@@ -127,14 +137,18 @@ fn locate_bin(project_dir: &Path, name: &str) -> Result<PathBuf> {
     );
 }
 
-fn locate_jam(project_dir: &Path) -> Result<PathBuf> {
-    for rel in ["out.jam", "target/release/out.jam"] {
-        let path = project_dir.join(rel);
+fn locate_jam(project_dir: &Path, jam_name: &str) -> Result<PathBuf> {
+    for dir in ["", "target/release"] {
+        let path = project_dir.join(dir).join(jam_name);
         if path.exists() {
             return Ok(path);
         }
     }
-    bail!("could not find out.jam under {}", project_dir.display());
+    bail!(
+        "could not find {jam_name} under {} — for a multi-bin project, set the bin target in \
+         nockd.toml ([deploy] bin_target) / --bin-target",
+        project_dir.display()
+    );
 }
 
 fn git_commit(dir: &Path) -> Option<String> {

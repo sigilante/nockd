@@ -300,7 +300,7 @@ nockd endpoint list
 
 ## 7. Deploy
 
-### The intended canonical deploy: `project = "."` (REAL TOOLCHAIN)  — ⚠️ CURRENTLY BROKEN
+### The intended canonical deploy: `project = "."` (REAL TOOLCHAIN)  — ✅ NOW WORKS
 
 `nockd.toml` ships with `project = "."` so `nockd deploy` shells out to `nockup` to build
 (DESIGN principle 7). The intended command:
@@ -310,31 +310,20 @@ cd examples/chain-watch
 nockd deploy -f nockd.toml
 ```
 
-**Result — it fails:**
+### ✅ ROUGH EDGE 7 (RESOLVED) — `nockd deploy --project` works now
 
-```
-Error: Project directory 'chain-watch' not found
-Error: `nockup project build` failed with status exit status: 1
-```
+This was the central pathfinder finding when first written. Root cause (in
+`nockd/src/buildkit.rs`): nockd ran `nockup project build` with **no positional arg, from
+inside the project dir**, but `nockup` ignored cwd and resolved the package name from
+`nockapp.toml` as a **subdirectory** to descend into (ROUGH EDGE 5) — so it looked for
+`./chain-watch/` inside the project and failed with `Project directory 'chain-watch' not
+found`.
 
-### ⚠️ ROUGH EDGE 7 — `nockd deploy --project` (project-mode) is broken on this nockd/nockup pair
-
-Root cause (verified by reading `nockd/src/buildkit.rs`): nockd's builder runs
-
-```rust
-Command::new("nockup").args(["project", "build"]).current_dir(project_dir)
-```
-
-i.e. `nockup project build` with **no positional arg, from inside the project dir**. But
-`nockup project build` ignores cwd and resolves the package name from `nockapp.toml` as a
-**subdirectory** to descend into (ROUGH EDGE 5) — so it looks for `./chain-watch/` inside
-the project and fails. The two tools disagree on the calling convention. There is no
-`nockd.toml`/`project` value that fixes this from the example side; it needs a fix in nockd
-(pass the project dir as an absolute-path arg: `nockup project build <abs path>`, which is
-known to work) or in nockup (honor cwd / accept `.`).
-
-**This is the central pathfinder finding.** Project-mode — the whole point of the
-build/run split — does not currently round-trip.
+**Fixed in nockd:** the builder now passes the canonicalized project dir as an absolute-path
+arg (`nockup project build <abs path>`, run from the parent). Single-bin projects like this
+one round-trip via `nockd deploy -f nockd.toml`. Multi-bin projects additionally need
+`bin_target` (see echo-grpc) — nockd locates `target/release/<bin>` + `<bin>.jam` instead of
+`out.jam`. Project-mode — the whole point of the build/run split — round-trips today.
 
 ### Fallback that closes the loop: prebuilt `--bin` / `--jam`
 
@@ -440,9 +429,9 @@ status populates and stays populated across restarts.
    from inside the project both fail.
 6. **Both rustls providers (ring + aws-lc-rs) are in the dep graph** → TLS panic; add
    `rustls` (feature `ring`) and `install_default()` at startup.
-7. **`nockd deploy --project` (project-mode) is broken**: nockd runs `nockup project build`
-   with no arg from inside the dir, which nockup rejects. Fall back to `--bin`/`--jam`. Fix
-   belongs in nockd (pass the abs project path) or nockup (honor cwd).
+7. **`nockd deploy --project` (project-mode) — RESOLVED**: nockd used to run `nockup project
+   build` with no arg from inside the dir, which nockup rejected. Fixed in nockd (passes the
+   abs project path); multi-bin projects also need `bin_target` (see echo-grpc).
 8. **BSD grep + NUL bytes in nockapp logs** breaks the documented status recipe; use
    `grep -a`.
 
