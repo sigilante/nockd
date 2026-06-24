@@ -1,0 +1,9 @@
+[package]
+name = "http-counter"
+version = "0.1.0"
+description = "An HTTP server that serves and increments a counter whose value PERSISTS across restarts via nockd kernel-state checkpointing."
+authors = ["sigilante"]
+license = "MIT"
+template = "http-server"
+
+[dependencies]
