@@ -39,7 +39,7 @@ pub struct DeployRequest {
     pub status_cmd: Option<String>,
     #[serde(default)]
     pub status_label: Option<String>,
-    /// The port an HTTP NockApp serves on. Exported as `NOCKD_PORT` (and `{port}` in args);
+    /// The port an HTTP NockApp serves on. Exported as `NOCKD_APP_PORT` (and `{port}` in args);
     /// the dashboard derives a `localhost:<port>` relay link from it.
     #[serde(default)]
     pub port: Option<u16>,

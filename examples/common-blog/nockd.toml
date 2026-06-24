@@ -12,8 +12,8 @@ app     = "common-blog"
 project = "."
 restart = "always"
 
-# The app serves an HTTP page. Declare the port ONCE here: nockd exports it as NOCKD_PORT, the
-# app binds that (main.rs reads NOCKD_PORT — no hardcoded port), and the dashboard shows an
+# The app serves an HTTP page. Declare the port ONCE here: nockd exports it as NOCKD_APP_PORT, the
+# app binds that (main.rs reads NOCKD_APP_PORT — no hardcoded port), and the dashboard shows an
 # "Open app ↗" relay link to localhost:<port> on the status page (and a ↗ next to the name in
 # the table).
 port    = 8085

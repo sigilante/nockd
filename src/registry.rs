@@ -32,7 +32,7 @@ pub struct AppRow {
     /// app's custom status line (e.g. block height for a nockchain observer).
     pub status_cmd: Option<String>,
     pub status_label: Option<String>,
-    /// The port an HTTP NockApp serves on. nockd exports it as `NOCKD_PORT` and substitutes
+    /// The port an HTTP NockApp serves on. nockd exports it as `NOCKD_APP_PORT` and substitutes
     /// `{port}` in args (so the app binds the port nockd declares); the dashboard derives an
     /// "open app" relay link to `localhost:<port>`.
     pub port: Option<u16>,

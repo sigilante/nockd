@@ -58,7 +58,7 @@ pub enum Commands {
         /// Nockchain public-gRPC endpoint URL (http://host:port).
         #[arg(long)]
         endpoint: Option<String>,
-        /// Port an HTTP NockApp serves on. nockd exports it as NOCKD_PORT (and substitutes
+        /// Port an HTTP NockApp serves on. nockd exports it as NOCKD_APP_PORT (and substitutes
         /// `{port}` in args) and the dashboard links to localhost:<port>. (Named --web-port to
         /// avoid the global --port, which is the daemon's control-API port.)
         #[arg(long)]

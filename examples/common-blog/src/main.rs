@@ -21,7 +21,7 @@
 //! `nockapp::http_driver()`, which speaks the %req/%res noun protocol our kernel expects. As
 //! of PR #134 the local-mode driver reads the `HTTP_PORT` env var and binds
 //! `127.0.0.1:<HTTP_PORT>` directly. nockd is the single source of truth for the port: it
-//! exports `NOCKD_PORT` (declared once in `nockd.toml`), and we bridge that to the driver's
+//! exports `NOCKD_APP_PORT` (declared once in `nockd.toml`), and we bridge that to the driver's
 //! `HTTP_PORT`. Run by hand without nockd and it falls back to 8085. No in-process proxy, and
 //! no shared :8080 backend, so this app coexists with the other example apps.
 //!
@@ -38,15 +38,15 @@ use nockapp::kernel::boot;
 use nockapp::{http_driver, NockApp};
 use tokio::signal::unix::{signal, SignalKind};
 
-/// Fallback port when run standalone (outside nockd). Under nockd, NOCKD_PORT wins, so the
+/// Fallback port when run standalone (outside nockd). Under nockd, NOCKD_APP_PORT wins, so the
 /// port is declared only in nockd.toml.
 const DEFAULT_PORT: &str = "8085";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    // nockd owns the port: it exports NOCKD_PORT. Bridge it to the library driver's HTTP_PORT
+    // nockd owns the port: it exports NOCKD_APP_PORT. Bridge it to the library driver's HTTP_PORT
     // (PR #134's override). Falls back to DEFAULT_PORT when run by hand. Set before the driver.
-    let http_port = std::env::var("NOCKD_PORT").unwrap_or_else(|_| DEFAULT_PORT.to_string());
+    let http_port = std::env::var("NOCKD_APP_PORT").unwrap_or_else(|_| DEFAULT_PORT.to_string());
     std::env::set_var("HTTP_PORT", &http_port);
     // Defeat the library http driver's GET response cache so every request re-pokes the
     // kernel (fresh index/post after publishing + a `metric: posts=<N>` line per request).

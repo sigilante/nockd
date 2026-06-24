@@ -12,7 +12,7 @@ restart = "on-failure"               # always | on-failure | never
 # args = ["--nockchain-grpc", "{endpoint}"]
 args = []
 
-# HTTP NockApp? Declare the port ONCE here. nockd exports it as NOCKD_PORT (read it in your
+# HTTP NockApp? Declare the port ONCE here. nockd exports it as NOCKD_APP_PORT (read it in your
 # app to bind — don't hardcode a port) and substitutes {port} in args, and the dashboard shows
 # an "Open app ↗" relay link to localhost:<port>.
 # port = 8085

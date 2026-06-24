@@ -159,7 +159,7 @@ pub struct DeploySection {
     #[serde(default)]
     pub endpoint: Option<String>,
     /// The port an HTTP NockApp serves on. nockd is the single source of truth: it exports
-    /// `NOCKD_PORT` and substitutes `{port}` in args so the app binds the port nockd declares
+    /// `NOCKD_APP_PORT` and substitutes `{port}` in args so the app binds the port nockd declares
     /// (no hardcoded port on either side), and the dashboard derives an "open app" link to
     /// `localhost:<port>` from it.
     #[serde(default)]

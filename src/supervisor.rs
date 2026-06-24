@@ -316,7 +316,7 @@ impl Supervisor {
     /// Spawn one instance: stage the kernel into the state dir, run the binary there with
     /// stdout/stderr captured to the app's log file. The `{endpoint}`/`{port}` placeholders in
     /// args are substituted with the resolved endpoint URL / declared port, which are also
-    /// exported as `NOCKD_ENDPOINT_URL` / `NOCKD_PORT` for apps that read config from the
+    /// exported as `NOCKD_ENDPOINT_URL` / `NOCKD_APP_PORT` for apps that read config from the
     /// environment (so the port lives only in the deploy config, not hardcoded in the app).
     fn spawn(&self, app: &AppRow, endpoint_url: Option<&str>, store: &Store) -> Result<Child> {
         let state_dir = self.paths.state_dir(&app.name);
@@ -362,7 +362,7 @@ impl Supervisor {
             command.env("NOCKD_ENDPOINT_URL", url);
         }
         if let Some(p) = &port_str {
-            command.env("NOCKD_PORT", p);
+            command.env("NOCKD_APP_PORT", p);
         }
         let child = command
             .spawn()

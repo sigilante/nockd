@@ -42,8 +42,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Force local mode (bind 127.0.0.1, no ACME/HTTPS).
     std::env::set_var("HTTPS_DOMAIN", "localhost");
     // PR #134: the stock http_driver() reads HTTP_PORT for its local-mode bind. No proxy.
+    // nockd is the single source of truth for the port — it exports NOCKD_APP_PORT (declared once
+    // in nockd.toml). Bridge it to HTTP_PORT; fall back to DEFAULT_PORT when run standalone.
     if std::env::var("HTTP_PORT").is_err() {
-        std::env::set_var("HTTP_PORT", DEFAULT_PORT);
+        let port = std::env::var("NOCKD_APP_PORT").unwrap_or_else(|_| DEFAULT_PORT.to_string());
+        std::env::set_var("HTTP_PORT", port);
     }
 
     // boot::default_boot_cli builds a Cli struct directly; it does NOT parse argv, so nockd's

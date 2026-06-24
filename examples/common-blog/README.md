@@ -65,7 +65,7 @@ Requires the pinned nightly in [`rust-toolchain.toml`](rust-toolchain.toml)
 (`nightly-2026-04-03`). The crates are pinned to nockchain rev
 `07577127958db94be12e95ea816f31bc7582aa2c`, which carries PR #134's `HTTP_PORT` override so
 the stock `http_driver()` binds `127.0.0.1:<port>` directly — no proxy. The port is declared
-once as `port = 8085` in `nockd.toml`; nockd exports `NOCKD_PORT` and `main.rs` bridges it to
+once as `port = 8085` in `nockd.toml`; nockd exports `NOCKD_APP_PORT` and `main.rs` bridges it to
 `HTTP_PORT` (falling back to 8085 when run standalone).
 
 ## Deploy (project mode)
