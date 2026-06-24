@@ -1,0 +1,23 @@
+# Declarative deploy manifest for hello-basic (DESIGN §7.2).
+#   nockd deploy -f nockd.toml      # registers/builds the artifact (project mode)
+#   nockd restart hello-basic       # swaps in the freshly deployed artifact
+#
+# project = "." builds the artifact with the real client-side toolchain (nockup) — the
+# build/run split (DESIGN principle 7) — rather than shipping a prebuilt --bin/--jam. This is
+# a single-bin project, so no bin_target is needed. restart = always keeps the heartbeat
+# running; because the process is long-lived (see src/main.rs) this does NOT crash-loop.
+[deploy]
+app     = "hello-basic"
+project = "."
+restart = "always"
+
+# No endpoint and no args: hello-basic talks to nothing. It is the minimal NockApp.
+args = []
+
+# Status metric: nockd runs this every 5s with the ANSI/NUL-stripped recent log on stdin and
+# cwd = the app's state dir. Our log line `metric: ticks=<N>` makes this a one-line grep,
+# surfacing the climbing heartbeat as the TICKS column in `nockd ps`. (nockd strips NUL bytes
+# from the kernel boot log now, so plain `grep -oE` works on macOS and Linux alike.)
+[deploy.status]
+label = "TICKS"
+cmd   = "grep -oE 'ticks=[0-9]+' | tail -1 | grep -oE '[0-9]+'"
