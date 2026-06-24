@@ -1,0 +1,10 @@
+# Rust build output
+/target
+
+# Build artifacts produced by `nockup project build` (rebuildable from source)
+/out.jam
+/app.nock
+
+# Local NockApp state dir created when running the binary by hand (cwd-relative).
+# Under nockd, state lives in the daemon's per-app state dir, not here.
+/.data.wordle

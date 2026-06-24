@@ -1,0 +1,30 @@
+# Declarative deploy manifest for wordle.
+#   nockd deploy -f nockd.toml
+#   nockd restart wordle
+#
+# project = "." builds the artifact client-side via nockup, then ships it (project-mode
+# deploy). The prebuilt fallback also works:
+#
+#   nockd deploy wordle \
+#     --bin ./target/release/wordle \
+#     --jam ./out.jam \
+#     --restart always \
+#     --status-label GUESSES \
+#     --status-cmd "grep -aoE 'guesses=[0-9]+' | tail -1 | grep -aoE '[0-9]+'"
+#
+# This app has NO Nockchain endpoint, so there is no `endpoint` field.
+[deploy]
+app     = "wordle"
+project = "."
+restart = "always"
+
+# Status metric: nockd runs this every few seconds with the ANSI- and NUL-stripped recent
+# log on stdin and cwd = the app's state dir. The kernel logs `metric: guesses=<N>` on EVERY
+# request, so the most recent cumulative guess count surfaces as the GUESSES column in
+# `nockd ps`.
+#
+# NOTE the `-a`: the nockapp kernel boot log contains NUL bytes; BSD grep (macOS) treats
+# NUL-bearing stdin as binary and suppresses `-o` output. `grep -a` forces text mode.
+[deploy.status]
+label = "GUESSES"
+cmd   = "grep -aoE 'guesses=[0-9]+' | tail -1 | grep -aoE '[0-9]+'"
