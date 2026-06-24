@@ -1,8 +1,6 @@
 /target
 *.sqlite*
 
-# Example NockApps live in their own repo (~/zorp/nockapps) and were mirrored here by mistake.
-# Don't track per-app copies; keep only the _skeleton/ template and the loose guidance docs
-# (GOTCHAS.md, README.md). The working copies stay on disk as a local deploy source.
-/examples/*/
-!/examples/_skeleton/
+# Example NockApps live in their own repo (~/zorp/nockapps). They're kept LOCAL-only here — a
+# deploy source for the running daemon — and never tracked in this repo.
+/examples/
