@@ -1,0 +1,9 @@
+[package]
+name = "common-blog"
+version = "0.1.0"
+description = "A minimal self-hosted blog NockApp: publish posts and read them over HTTP, with all logic + storage in the Hoon kernel. A NockApp reimplementation of the Urbit Common Blog idea."
+authors = ["sigilante"]
+license = "MIT"
+template = "http-server"
+
+[dependencies]

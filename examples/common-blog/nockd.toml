@@ -1,0 +1,21 @@
+# Declarative deploy manifest for common-blog.
+#   nockd deploy -f nockd.toml      # registers the app (project-mode: nockd builds via nockup)
+#   nockd restart common-blog       # swaps in the freshly built artifact
+#
+# project = "." is the intended UX: nockd shells out to the real client-side toolchain
+# (nockup) with the absolute project path to build the artifact, then ships it. This is a
+# single-bin project, so no `bin_target` is needed.
+#
+# This app has NO Nockchain endpoint, so there is no `endpoint` field.
+[deploy]
+app     = "common-blog"
+project = "."
+restart = "always"
+
+# Status metric: nockd runs this every few seconds with the ANSI- and NUL-stripped recent log
+# on stdin and cwd = the app's state dir. The kernel logs `metric: posts=<N>` (the live count
+# of published posts) on EVERY request, so the most recent value is always available to grep,
+# surfacing the post count as the POSTS column in `nockd ps`.
+[deploy.status]
+label = "POSTS"
+cmd   = "grep -oE 'posts=[0-9]+' | tail -1 | grep -oE '[0-9]+'"
