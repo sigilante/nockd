@@ -1,0 +1,31 @@
+# Declarative deploy manifest for nock-price (DESIGN §7.2).
+#   nockd deploy -f nockd.toml
+#
+# NOTE: project-mode deploy is currently BROKEN on this nockd/nockup pair (nockd runs
+# `nockup project build` with no arg from inside the project dir, which nockup rejects — see
+# RECIPE.md ROUGH EDGE 7, inherited from chain-watch). This manifest is shipped as the
+# intended UX; in practice deploy PREBUILT with --bin/--jam (see README.md / RECIPE.md).
+#
+# project = "." builds the artifact with the real client-side toolchain (nockup), exercising
+# DESIGN principle 7's build/run split, rather than shipping a prebuilt --bin/--jam.
+[deploy]
+app      = "nock-price"
+project  = "."
+restart  = "always"
+
+# This app talks to external HTTPS price APIs baked into the wrapper (DexScreener, Kraken,
+# CoinGecko) — NOT a Nockchain RPC endpoint — so there is no `endpoint` field and no args.
+
+# Status metric: nockd runs this every few seconds with the ANSI-stripped recent log on
+# stdin and cwd = the app's state dir. Our log line `metric: nock_usd=<price>` (the median
+# aggregate, on its OWN line, distinct from `nock_usd_base=` etc.) makes this a one-line
+# grep, surfacing the live aggregate USD price as the USD column in `nockd ps`.
+#
+# NOTE the `-a`: the nockapp kernel boot log contains NUL bytes (raw atom dumps, e.g. the
+# build-hash line). nockd strips ANSI but not NULs, and BSD grep (macOS) treats NUL-bearing
+# stdin as *binary* and suppresses `-o` output — so a plain `grep -oE ...` silently yields
+# NO value. `grep -a` forces text mode and fixes it on both BSD and GNU grep. The `[0-9.]+`
+# (vs an integer pattern) is required because prices are decimal.
+[deploy.status]
+label = "USD"
+cmd   = "grep -aoE 'nock_usd=[0-9.]+' | tail -1 | grep -aoE '[0-9.]+'"

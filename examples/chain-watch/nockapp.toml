@@ -1,0 +1,9 @@
+[package]
+name = "chain-watch"
+version = "0.1.0"
+description = "A long-lived service that polls the Nockchain public gRPC endpoint for the heaviest block height and logs one greppable metric line per poll."
+authors = ["sigilante"]
+license = "MIT"
+template = "basic"
+
+[dependencies]

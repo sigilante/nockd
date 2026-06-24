@@ -1,0 +1,9 @@
+[package]
+name = "nock-price"
+version = "0.1.0"
+description = "A long-lived service that polls the live $NOCK token price from multiple venues and logs a median aggregate USD price as a greppable metric line per tick."
+authors = ["sigilante"]
+license = "MIT"
+template = "basic"
+
+[dependencies]
