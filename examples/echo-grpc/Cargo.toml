@@ -1,0 +1,56 @@
+[package]
+name = "echo-grpc"
+version = "0.1.0"
+edition = "2021"
+authors = ["sigilante"]
+description = "Demonstrates the private NockApp gRPC surface with a poke/peek echo roundtrip."
+
+# Two binaries, mirroring the `grpc` template:
+#   listen — the SERVER NockApp. Boots the Hoon kernel from out.jam and runs the private
+#            gRPC server driver. This is the binary you deploy under nockd.
+#   talk   — a small CLIENT that drives one poke (store a value) + one peek (read it back)
+#            against the listen server, proving the roundtrip end to end.
+[[bin]]
+name = "listen"
+path = "src/listen.rs"
+
+[[bin]]
+name = "talk"
+path = "src/talk.rs"
+
+[dependencies]
+# NockVM / NockApp runtime + the private NockApp gRPC service. Pinned to the nockchain rev
+# that chain-watch proved known-good for the gRPC crate. The `grpc` template's default pin
+# (485e914) predates the current `services::private_nockapp` layout used here, so we bump to
+# 6d29078 and align all four crates to one consistent source tree.
+nockapp = { git = "https://github.com/nockchain/nockchain.git", rev = "6d29078e69b64febabe3d8d20a64c06b969a16ed" }
+nockvm = { git = "https://github.com/nockchain/nockchain.git", rev = "6d29078e69b64febabe3d8d20a64c06b969a16ed" }
+nockvm_macros = { git = "https://github.com/nockchain/nockchain.git", rev = "6d29078e69b64febabe3d8d20a64c06b969a16ed" }
+noun-serde = { git = "https://github.com/nockchain/nockchain.git", rev = "6d29078e69b64febabe3d8d20a64c06b969a16ed" }
+nockapp-grpc = { git = "https://github.com/nockchain/nockchain.git", rev = "6d29078e69b64febabe3d8d20a64c06b969a16ed" }
+
+# Common dependencies for NockApps
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+anyhow = "1.0"
+bytes = "1.5.0"
+clap = { version = "4.4.4", features = ["derive"] }
+tokio = { version = "1.32", features = [
+  "fs",
+  "io-util",
+  "macros",
+  "net",
+  "rt-multi-thread",
+  "rt",
+  "signal",
+  "time",
+] }
+tokio-util = "0.7.11"
+tracing = "0.1.41"
+# The nockchain dep graph enables BOTH rustls crypto providers (ring + aws-lc-rs), so rustls
+# cannot auto-select one and panics on the first TLS handshake. The private gRPC surface is
+# local plaintext (http://), so we may never hit it, but install a provider defensively.
+rustls = { version = "0.23", features = ["ring"] }
+
+[build-dependencies]
+# Build script dependencies if needed
