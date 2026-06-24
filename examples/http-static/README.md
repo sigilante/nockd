@@ -29,8 +29,8 @@ nockup project build http-static
 ```
 
 This produces `out.jam` (the compiled kernel) and `target/release/http-static` (the runtime).
-Built clean against nockchain rev `6d29078e69b64febabe3d8d20a64c06b969a16ed` with the
-`rust-toolchain.toml` nightly (`nightly-2026-04-03`).
+Built clean against nockchain rev `07577127958db94be12e95ea816f31bc7582aa2c` (PR #134, which
+adds the `HTTP_PORT` override) with the `rust-toolchain.toml` nightly (`nightly-2026-04-03`).
 
 ## Deploy under nockd (project mode)
 
@@ -72,13 +72,12 @@ Example response for `GET /` (formatting collapsed):
 
 ## Port
 
-The app serves on **8083** by default (override with the `HTTP_PORT` env var).
+The app serves on **8083**, set via the `HTTP_PORT` env var in `src/main.rs`.
 
-⚠️ At the pinned rev, the library HTTP driver hardcodes its local backend to `127.0.0.1:8080`,
-so this app runs the driver on 8080 and exposes 8083 via a tiny in-process TCP proxy (see
-`src/main.rs`). A side effect: **two library-driver NockApps cannot run in local mode at the
-same time** — both want port 8080. Run `http-static` *or* `http-counter`, not both. (Upstream
-PR #134 adds an `HTTP_PORT` override that removes the proxy and the collision; the suite will
-adopt it when all revs are bumped together.)
+As of **PR #134** (rev `07577127…`, the rev pinned here) the library HTTP driver reads
+`HTTP_PORT` and binds `127.0.0.1:<HTTP_PORT>` **directly** — no proxy, and no shared `:8080`
+backend. Because each app binds its own port, **http-static (8083) and
+[`http-counter`](../http-counter/) (8081) run at the same time** — which was impossible at the
+old rev, where the driver hardcoded `127.0.0.1:8080` and only one app could hold it.
 
 See [`RECIPE.md`](RECIPE.md) for the full build/deploy transcript and rough edges.

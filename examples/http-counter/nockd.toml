@@ -2,18 +2,11 @@
 #   nockd deploy -f nockd.toml
 #
 # project = "." is the INTENDED UX: nockd shells out to the real client-side toolchain
-# (nockup) to build the artifact, exercising DESIGN principle 7's build/run split.
+# (nockup) with the absolute project path to build the artifact, then ships it. This is a
+# single-bin project, so no `bin_target` is needed. Deploy + activate with:
 #
-# NOTE: project-mode deploy is currently BROKEN on this nockd/nockup pair (nockd runs
-# `nockup project build` with no positional arg from inside the project dir, which nockup
-# rejects -- see RECIPE.md). Until that is fixed, deploy the PREBUILT artifact instead:
-#
-#   nockd deploy http-counter \
-#     --bin ./target/release/http-counter \
-#     --jam ./out.jam \
-#     --restart always \
-#     --status-label COUNT \
-#     --status-cmd "grep -aoE 'count=[0-9]+' | tail -1 | grep -aoE '[0-9]+'"
+#   nockd deploy -f nockd.toml      # registers + builds the app via nockup
+#   nockd restart http-counter      # swaps in the freshly built artifact
 #
 # This app has NO Nockchain endpoint, so there is no `endpoint` field.
 [deploy]

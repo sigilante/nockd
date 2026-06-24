@@ -10,12 +10,14 @@ name = "http-counter"
 path = "src/main.rs"
 
 [dependencies]
-# NockVM / NockApp runtime. Pinned to the same nockchain rev proven by chain-watch
-# (the http-server template's pin 336f744 predates the toolchain/API used here). All three
-# runtime crates share one rev so they come from a single consistent source tree.
-nockapp = { git = "https://github.com/nockchain/nockchain.git", rev = "6d29078e69b64febabe3d8d20a64c06b969a16ed" }
-nockvm = { git = "https://github.com/nockchain/nockchain.git", rev = "6d29078e69b64febabe3d8d20a64c06b969a16ed" }
-nockvm_macros = { git = "https://github.com/nockchain/nockchain.git", rev = "6d29078e69b64febabe3d8d20a64c06b969a16ed" }
+# NockVM / NockApp runtime. Pinned to the rev that adds the HTTP_PORT override to the local
+# HTTP driver (PR #134, one commit past 6d29078 -- the only diff is crates/nockapp/src/
+# drivers/http/http.rs). This lets the stock http_driver() bind 127.0.0.1:<HTTP_PORT>
+# directly, so http-counter and http-static can run simultaneously (no more shared :8080).
+# All three runtime crates share one rev so they come from a single consistent source tree.
+nockapp = { git = "https://github.com/nockchain/nockchain.git", rev = "07577127958db94be12e95ea816f31bc7582aa2c" }
+nockvm = { git = "https://github.com/nockchain/nockchain.git", rev = "07577127958db94be12e95ea816f31bc7582aa2c" }
+nockvm_macros = { git = "https://github.com/nockchain/nockchain.git", rev = "07577127958db94be12e95ea816f31bc7582aa2c" }
 
 # Common dependencies for NockApps
 serde = { version = "1.0", features = ["derive"] }
@@ -34,8 +36,8 @@ tokio = { version = "1.32", features = [
 ] }
 tokio-util = "0.7.11"
 tracing = "0.1.41"
-# (No axum here: we use the library's nockapp::http_driver() on 8080 and a small in-process
-#  tokio TCP proxy to expose the required port 8081 -- see src/main.rs.)
+# (No axum here: we use the library's nockapp::http_driver(), which binds 127.0.0.1:8081
+#  directly via the HTTP_PORT env var (set in src/main.rs). No proxy needed.)
 
 [build-dependencies]
 # Build script dependencies if needed

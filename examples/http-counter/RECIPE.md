@@ -5,7 +5,8 @@ template, building it with the real `nockup` toolchain, and deploying it under `
 live status metric — and **proving the counter persists across restarts**.
 
 Verified on macOS (darwin, aarch64-apple-darwin) on 2026-06-24, against nockchain rev
-`6d29078e69b64febabe3d8d20a64c06b969a16ed`.
+`07577127958db94be12e95ea816f31bc7582aa2c` (PR #134, one commit past `6d29078`, adding the
+`HTTP_PORT` override — see ROUGH EDGE A below).
 
 This recipe builds on [`chain-watch/RECIPE.md`](../chain-watch/RECIPE.md). The eight rough
 edges documented there (init nesting, empty rev, ambient toolchain `cold_path`, build-as-
@@ -46,47 +47,46 @@ Then wrote `Cargo.toml`, `nockapp.toml`, `.gitignore`, `nockd.toml`, `src/main.r
 
 ---
 
-## 2. Rev choice — the http-server template's pin is too old; use `6d29078`
+## 2. Rev choice — `07577127…` (PR #134, for the `HTTP_PORT` override)
 
-The `http-server` template pins `rev = "336f744b6b83448ec2b86473a3dec29b15858999"`. We pinned
-all three runtime crates (`nockapp`, `nockvm`, `nockvm_macros`) to chain-watch's proven
-`6d29078…` instead. With the `rust-toolchain.toml` nightly (`nightly-2026-04-03`) in place,
+The `http-server` template pins `rev = "336f744b6b83448ec2b86473a3dec29b15858999"` (too old).
+We pin all three runtime crates (`nockapp`, `nockvm`, `nockvm_macros`) to
+`07577127958db94be12e95ea816f31bc7582aa2c` — the merge of **PR #134**, exactly ONE commit
+past `6d29078`, whose ONLY diff is `crates/nockapp/src/drivers/http/http.rs` adding the
+`HTTP_PORT` env var. With the `rust-toolchain.toml` nightly (`nightly-2026-04-03`) in place,
 the Rust + Hoon build was clean. (We did NOT need `nockapp-grpc` or `rustls` — this app has
 no chain endpoint and makes no TLS calls.)
 
-API drift handled (as chain-watch flagged): `boot::setup` takes `cli` directly (not
-`Some(cli)`), and `NockApp` is generic `NockApp<J>` (inferred). The template's `main.rs`
-used `Some(cli)`; we pass `cli`.
+API drift: **none** beyond what chain-watch already flagged. `boot::setup` takes `cli`
+directly (not `Some(cli)`) and `NockApp` is generic `NockApp<J>` (inferred) — identical to
+`6d29078`, since PR #134 touches only the HTTP driver. The bump from `6d29078` to `07577127`
+required ZERO source changes other than deleting the proxy and adding the `HTTP_PORT` line.
 
 ---
 
-## ⚠️ NEW ROUGH EDGE A — the library `http_driver()` hardcodes port 8080, and you can't replace it out-of-crate
+## ✅ FORMER ROUGH EDGE A — port binding (was: hardcoded 8080 + proxy; now: `HTTP_PORT`)
 
 The template's `main.rs` does `nockapp.add_io_driver(http_driver()).await`. `http_driver` is
-`pub use http::http::http as http_driver` — the full HTTP driver. In **local mode** (when
-`HTTPS_DOMAIN` is unset/`localhost`) it binds **`127.0.0.1:8080`**, hardcoded, with **no**
-port env var:
+`pub use http::http::http as http_driver` — the full HTTP driver.
+
+**The old problem (rev `6d29078`):** in local mode (when `HTTPS_DOMAIN` is unset/`localhost`)
+the driver bound **`127.0.0.1:8080`**, hardcoded, with **no** port env var. Copying the driver
+into the project to change the port did NOT work out-of-crate: the effect-parsing path needs
+`NounSlab::noun_space()` and `ptr_ranges()` (both crate-private) to resolve the slab's
+offset-form root. The only public-API workaround was a tiny in-process TCP proxy
+(public port → 8080) via `tokio::io::copy_bidirectional` — which also meant two library-driver
+apps couldn't run at once (they collided on 8080).
+
+**The fix (this rev, `07577127…` / PR #134):** the local-mode driver now reads the
+**`HTTP_PORT`** env var and binds `127.0.0.1:<HTTP_PORT>` directly. So `src/main.rs` just does:
 
 ```rust
-// nockapp/src/drivers/http/http.rs
-let http_listener = tokio::net::TcpListener::bind("127.0.0.1:8080").await?;  // ← fixed
+std::env::set_var("HTTP_PORT", "8081");   // before the driver starts
 ```
 
-The obvious fix — copy the driver into the project and change the port — does **not** work
-from outside the `nockapp` crate. The effect-parsing path needs `NounSlab::noun_space()` and
-`ptr_ranges()` to resolve the slab's offset-form root noun (`slab.root().in_space(&space)`),
-and both methods are **crate-private**. There is no public way to read an effect slab's root
-the way the bundled drivers do. (`NounSpace::empty()`/`with_extra_ptr_ranges` are public, but
-`ptr_ranges()` — the data you'd feed them — is not.)
-
-**Fix that works with only public API:** keep the proven library driver on 8080 and expose
-the required port 8081 with a tiny transparent **in-process TCP proxy** (8081 → 8080) using
-`tokio::io::copy_bidirectional`. Clients hit 8081; the kernel interaction is 100% the stock,
-proven driver. See `src/main.rs`. The port is read from `HTTP_PORT` (default 8081).
-
-> Recommendation for nockchain: have the local-mode HTTP driver read a `HTTP_PORT` (or
-> `HTTP_BIND`) env var, OR make `NounSlab::noun_space()` public so out-of-crate drivers can
-> parse effects. Either removes the need for the proxy.
+No proxy, no `TcpListener`/`copy_bidirectional` glue, no shared `:8080`. Each app binds its own
+port, so **http-counter (8081) and http-static (8083) run simultaneously** (verified — see §7).
+The bump was purely mechanical: delete the proxy code, add the one `set_var` line.
 
 ---
 
@@ -189,58 +189,63 @@ the binary from the same dir → `GET /` still shows `Count: 3`. State lives in
 
 ---
 
-## 6. Deploy (prebuilt — project-mode still broken, chain-watch ROUGH EDGE 7)
+## 6. Deploy — PROJECT MODE
 
 ```sh
 cd examples/http-counter
-rm -rf .data.http-counter           # let nockd manage its own state dir
-nockd deploy http-counter \
-  --bin ./target/release/http-counter \
-  --jam ./out.jam \
-  --restart always \
-  --status-label COUNT \
-  --status-cmd "grep -aoE 'count=[0-9]+' | tail -1 | grep -aoE '[0-9]+'"
+nockd deploy -f nockd.toml      # nockd shells out to nockup with the ABSOLUTE project path
+nockd restart http-counter      # swaps in the freshly built artifact
 # deployed http-counter
-#   artifact 32fe5549…
+#   artifact ba4c5be5…
 #   kernel   1bd12833…
 ```
 
-No `--endpoint` (no chain endpoint). `nockd.toml` ships `project = "."` as intended UX but
-documents the prebuilt fallback in a comment.
+No `--endpoint` (no chain endpoint). `nockd.toml` carries `project = "."` (single-bin, so no
+`bin_target`). (Project-mode deploy was broken when this recipe was first written and used the
+prebuilt `--bin`/`--jam` path; the fixed nockd builds via nockup directly, so we use that now.)
 
 ---
 
-## 7. Verify + the persistence proof
+## 7. Verify + the persistence proof + SIMULTANEOUS WITH http-static
 
 ```sh
 nockd ps
 # NAME          STATE    HEALTH   VERIFIED  PID    ENDPOINT  STATUS
-# http-counter  running  unknown  verified  15473  —         COUNT 5
+# http-counter  running  unknown  verified  11045  —         COUNT 5
+# http-static   running  unknown  verified  10984  —         REQ 29
 
 curl -s localhost:8081/ | grep -i count          # Count: 5
 for i in 1 2 3 4 5; do curl -s -X POST localhost:8081/increment; done   # → 5
 # ps shows COUNT 5 (status populated; the -a grep handles the NUL-bearing boot log)
 
+# === SIMULTANEITY PROOF (the point of the HTTP_PORT bump) ===
+# Both apps run at once now that each binds its own port directly (no shared :8080):
+curl -s localhost:8081/ | grep -io 'Count: *[0-9]*'   # http-counter on :8081
+curl -s localhost:8083/ | grep -o '<title>[^<]*'      # http-static  on :8083, concurrently
+lsof -nP -iTCP:8081 -iTCP:8083 -sTCP:LISTEN           # two procs, two ports, none on :8080
+
 # === PERSISTENCE PROOF ===
-nockd restart http-counter           # new PID 21473
-curl -s localhost:8081/ | grep -i count          # Count: 5   ← SURVIVED the restart
-curl -s -X POST localhost:8081/increment         # Count: 6   ← continues from 5, not reset
+nockd restart http-counter           # new PID
+curl -s localhost:8081/ | grep -i count          # Count: N   ← SURVIVED the restart
+curl -s -X POST localhost:8081/increment         # continues from N, not reset
 curl -s -X POST localhost:8081/reset             # Count: 0
 ```
 
 `running + verified` (self-signed by the trusted builder key). COUNT status populated and
-matches the rendered page. **The count survived `nockd restart` with its value intact** —
-the headline feature, confirmed.
+matches the rendered page. **The count survived `nockd restart` with its value intact** (the
+headline feature) AND **both http-counter and http-static served concurrently** on 8081/8083 —
+both confirmed.
 
 ---
 
-## 8. Summary of NEW rough edges (vs chain-watch)
+## 8. Summary of rough edges (vs chain-watch)
 
-- **A. `http_driver()` hardcodes 127.0.0.1:8080 and can't be replaced out-of-crate** (the
-  effect-parsing helpers `NounSlab::noun_space()`/`ptr_ranges()` are private). Worked around
-  with a tiny in-process TCP proxy 8081→8080.
+- **A. (RESOLVED by PR #134.)** `http_driver()` used to hardcode `127.0.0.1:8080` and couldn't
+  be replaced out-of-crate (the effect-parsing helpers `NounSlab::noun_space()`/`ptr_ranges()`
+  are private) → we used an in-process TCP proxy. The driver now reads `HTTP_PORT` and binds it
+  directly, so we just `set_var("HTTP_PORT", "8081")` — no proxy, and apps coexist.
 - **B. The local HTTP driver caches GET responses forever** → stale count + no per-request
-  kernel poke (so no metric). Fixed with `EXPIRE_CACHE=0`.
+  kernel poke (so no metric). Fixed with `EXPIRE_CACHE=0`. (Still applies.)
 - **C. Adding an extra arm to the `++inner` door breaks the `(keep)` wrapper nest** — the
   `fort` mold expects exactly load/peek/poke. Put helpers in the prelude core instead.
 

@@ -1599,7 +1599,7 @@ dependencies = [
 [[package]]
 name = "ibig"
 version = "0.3.6"
-source = "git+https://github.com/nockchain/nockchain.git?rev=6d29078e69b64febabe3d8d20a64c06b969a16ed#6d29078e69b64febabe3d8d20a64c06b969a16ed"
+source = "git+https://github.com/nockchain/nockchain.git?rev=07577127958db94be12e95ea816f31bc7582aa2c#07577127958db94be12e95ea816f31bc7582aa2c"
 dependencies = [
  "cfg-if",
  "num-traits",
@@ -2078,7 +2078,7 @@ dependencies = [
 [[package]]
 name = "murmur3"
 version = "0.5.2"
-source = "git+https://github.com/nockchain/nockchain.git?rev=6d29078e69b64febabe3d8d20a64c06b969a16ed#6d29078e69b64febabe3d8d20a64c06b969a16ed"
+source = "git+https://github.com/nockchain/nockchain.git?rev=07577127958db94be12e95ea816f31bc7582aa2c#07577127958db94be12e95ea816f31bc7582aa2c"
 
 [[package]]
 name = "no-std-compat"
@@ -2089,7 +2089,7 @@ checksum = "b93853da6d84c2e3c7d730d6473e8817692dd89be387eb01b94d7f108ecb5b8c"
 [[package]]
 name = "nockapp"
 version = "0.1.0"
-source = "git+https://github.com/nockchain/nockchain.git?rev=6d29078e69b64febabe3d8d20a64c06b969a16ed#6d29078e69b64febabe3d8d20a64c06b969a16ed"
+source = "git+https://github.com/nockchain/nockchain.git?rev=07577127958db94be12e95ea816f31bc7582aa2c#07577127958db94be12e95ea816f31bc7582aa2c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2150,7 +2150,7 @@ dependencies = [
 [[package]]
 name = "nockvm"
 version = "0.1.0"
-source = "git+https://github.com/nockchain/nockchain.git?rev=6d29078e69b64febabe3d8d20a64c06b969a16ed#6d29078e69b64febabe3d8d20a64c06b969a16ed"
+source = "git+https://github.com/nockchain/nockchain.git?rev=07577127958db94be12e95ea816f31bc7582aa2c#07577127958db94be12e95ea816f31bc7582aa2c"
 dependencies = [
  "autotools",
  "bincode",
@@ -2181,7 +2181,7 @@ dependencies = [
 [[package]]
 name = "nockvm_crypto"
 version = "0.1.0"
-source = "git+https://github.com/nockchain/nockchain.git?rev=6d29078e69b64febabe3d8d20a64c06b969a16ed#6d29078e69b64febabe3d8d20a64c06b969a16ed"
+source = "git+https://github.com/nockchain/nockchain.git?rev=07577127958db94be12e95ea816f31bc7582aa2c#07577127958db94be12e95ea816f31bc7582aa2c"
 dependencies = [
  "aes",
  "aes-siv",
@@ -2196,7 +2196,7 @@ dependencies = [
 [[package]]
 name = "nockvm_macros"
 version = "0.1.0"
-source = "git+https://github.com/nockchain/nockchain.git?rev=6d29078e69b64febabe3d8d20a64c06b969a16ed#6d29078e69b64febabe3d8d20a64c06b969a16ed"
+source = "git+https://github.com/nockchain/nockchain.git?rev=07577127958db94be12e95ea816f31bc7582aa2c#07577127958db94be12e95ea816f31bc7582aa2c"
 dependencies = [
  "quote",
  "syn",
@@ -2239,7 +2239,7 @@ dependencies = [
 [[package]]
 name = "noun-serde"
 version = "0.1.0"
-source = "git+https://github.com/nockchain/nockchain.git?rev=6d29078e69b64febabe3d8d20a64c06b969a16ed#6d29078e69b64febabe3d8d20a64c06b969a16ed"
+source = "git+https://github.com/nockchain/nockchain.git?rev=07577127958db94be12e95ea816f31bc7582aa2c#07577127958db94be12e95ea816f31bc7582aa2c"
 dependencies = [
  "bytes",
  "ibig",
@@ -2252,7 +2252,7 @@ dependencies = [
 [[package]]
 name = "noun-serde-derive"
 version = "0.1.0"
-source = "git+https://github.com/nockchain/nockchain.git?rev=6d29078e69b64febabe3d8d20a64c06b969a16ed#6d29078e69b64febabe3d8d20a64c06b969a16ed"
+source = "git+https://github.com/nockchain/nockchain.git?rev=07577127958db94be12e95ea816f31bc7582aa2c#07577127958db94be12e95ea816f31bc7582aa2c"
 dependencies = [
  "nockvm",
  "proc-macro2",

@@ -5,7 +5,8 @@ The honest transcript for scaffolding a **stateless, static-content HTTP NockApp
 `nockd` in **project mode** with a live REQ status metric.
 
 Verified on macOS (darwin, aarch64-apple-darwin) on 2026-06-24, against nockchain rev
-`6d29078e69b64febabe3d8d20a64c06b969a16ed`.
+`07577127958db94be12e95ea816f31bc7582aa2c` (PR #134, one commit past `6d29078`, adding the
+`HTTP_PORT` override — see ROUGH EDGE D below).
 
 This recipe builds directly on [`http-counter/RECIPE.md`](../http-counter/RECIPE.md). All of
 http-counter's rough edges (and chain-watch's underneath it) still apply: init nesting, empty
@@ -49,15 +50,18 @@ Then wrote `hoon/app/app.hoon`, `Cargo.toml`, `nockapp.toml`, `.gitignore`, `noc
 
 ---
 
-## 2. Rev choice — `6d29078` (the template's `336f744` is too old)
+## 2. Rev choice — `07577127…` (PR #134, for the `HTTP_PORT` override)
 
 The `http-static` template pins `rev = "336f744…"`, which predates the toolchain/API used by
-this nockd suite. We pinned all three runtime crates to http-counter's proven
-`6d29078…` instead. With `rust-toolchain.toml`'s `nightly-2026-04-03`, the Rust + Hoon build was
-clean. No `rustls`/`nockapp-grpc` needed — this app has no chain endpoint and makes no TLS calls.
+this nockd suite. We pin all three runtime crates to http-counter's
+`07577127958db94be12e95ea816f31bc7582aa2c` — the merge of **PR #134**, exactly ONE commit past
+`6d29078`, whose ONLY diff is `crates/nockapp/src/drivers/http/http.rs` adding the `HTTP_PORT`
+env var. With `rust-toolchain.toml`'s `nightly-2026-04-03`, the Rust + Hoon build was clean. No
+`rustls`/`nockapp-grpc` needed — this app has no chain endpoint and makes no TLS calls.
 
-API at `6d29078`: `boot::setup` takes `cli: Cli` (not `Some(cli)`) and `NockApp` is generic
-`NockApp<J>` (inferred) — same as http-counter, so no new drift.
+API: `boot::setup` takes `cli: Cli` (not `Some(cli)`) and `NockApp` is generic `NockApp<J>`
+(inferred) — same as `6d29078`, so **no new drift**. Bumping from `6d29078` to `07577127`
+required ZERO source changes other than deleting the proxy and adding the `HTTP_PORT` line.
 
 ---
 
@@ -83,25 +87,20 @@ The only state is `requests=@`, a tally bumped on every poke purely to drive the
 
 ---
 
-## ⚠️ NEW ROUGH EDGE D — two library-driver apps can't share local mode (both hardcode :8080)
+## ✅ FORMER ROUGH EDGE D — two library-driver apps can now share local mode (PR #134)
 
-http-counter rough edge A established that the local HTTP driver hardcodes `127.0.0.1:8080`
-with no override, worked around with an in-process TCP proxy (public port → 8080). For a single
-app that's fine. The NEW observation for a *second* such app:
+http-counter's old ROUGH EDGE A: the local HTTP driver hardcoded `127.0.0.1:8080` with no
+override, worked around with an in-process TCP proxy (public port → 8080). The NEW problem this
+recipe originally documented: because the *backend* port was hardcoded, **two library-driver
+NockApps could not run in local mode simultaneously** — both tried to bind `127.0.0.1:8080` and
+the second failed. We had to `nockd stop http-counter` before bringing http-static up.
 
-Because the backend port is hardcoded, **two library-driver NockApps cannot run in local mode
-simultaneously** — both try to bind `127.0.0.1:8080` and the second fails. While http-counter
-was running it held 8080, so http-static could not start its driver. We confirmed this directly
-(`lsof -nP -iTCP:8080 -sTCP:LISTEN` showed http-counter's `bin` owning 8080).
-
-**Workaround for now:** run **one** library-driver app at a time. We `nockd stop http-counter`
-before bringing http-static up; the proxy then forwards 8083 → 8080 as usual. The public-port
-override (`HTTP_PORT`) only moves the *proxy* port, not the backend, so it does not resolve the
-collision.
-
-**Real fix:** upstream PR #134 adds an `HTTP_PORT` env var to the local driver so it binds the
-chosen port directly — no proxy, no shared 8080, no collision. The example suite will adopt it
-when all revs are bumped together (kept on `6d29078` + proxy here to match http-counter).
+**Resolved by PR #134 (this rev, `07577127…`):** the local driver now reads `HTTP_PORT` and
+binds `127.0.0.1:<HTTP_PORT>` **directly**. http-static sets `HTTP_PORT=8083`, http-counter sets
+`HTTP_PORT=8081`, and they bind their own ports with no shared `:8080` — so they **run at the
+same time**. Verified directly: `lsof -nP -iTCP:8081 -iTCP:8083 -sTCP:LISTEN` shows two procs on
+two ports, nothing on 8080, and concurrent `curl localhost:8081/` + `curl localhost:8083/` both
+return their pages while `nockd ps` shows both `running`/`verified`. The proxy code is gone.
 
 ---
 
@@ -140,7 +139,8 @@ the template dir) and a `build.rs` `unused import: fs` warning. Build still succ
 
 ## 6. Smoke test the binary directly (before nockd)
 
-Free 8080 first (`nockd stop http-counter` — see rough edge D), then:
+No need to free any port — the driver binds 8083 directly (rough edge D resolved), so it does
+not touch 8080 and does not collide with http-counter:
 
 ```sh
 cd examples/http-static
@@ -175,31 +175,37 @@ nockd restart http-static       # swaps in the freshly built artifact
 
 ---
 
-## 8. Verify
+## 8. Verify — including SIMULTANEOUS with http-counter
 
 ```sh
 nockd ps
-# NAME         STATE    HEALTH   VERIFIED  PID    ENDPOINT  STATUS
-# http-static  running  unknown  verified  27042  —         REQ 10
+# NAME          STATE    HEALTH   VERIFIED  PID    ENDPOINT  STATUS
+# http-counter  running  unknown  verified  11045  —         COUNT 5
+# http-static   running  unknown  verified  10984  —         REQ 29
 
 curl -s localhost:8083/        # full static landing page (h1 "http-static")
 curl -s localhost:8083/about   # static about page (h1 "About this NockApp")
 for i in 1 2 3 4; do curl -s -o /dev/null localhost:8083/; done
-nockd ps | grep http-static    # REQ climbed (e.g. 10 → 17): increments per request
+nockd ps | grep http-static    # REQ climbed (e.g. 23 → 29): increments per request
+
+# === SIMULTANEITY PROOF (the point of the HTTP_PORT bump) ===
+curl -s localhost:8083/ | grep -o '<title>[^<]*'      # http-static on :8083
+curl -s localhost:8081/ | grep -io 'Count: *[0-9]*'   # http-counter on :8081, concurrently
+lsof -nP -iTCP:8081 -iTCP:8083 -sTCP:LISTEN           # two procs, two ports, none on :8080
 ```
 
 `running + verified` (self-signed by the trusted builder key). REQ status populated and climbs
 one per request. The served HTML is identical every time — the headline feature (static
-content from the kernel), confirmed.
+content from the kernel) — AND **http-static and http-counter served concurrently** on
+8083/8081, which was impossible before PR #134. Both confirmed.
 
 ---
 
-## 9. Summary of NEW rough edges (vs http-counter)
+## 9. Summary of rough edges (vs http-counter)
 
-- **D. Two library-driver apps can't share local mode** — both hardcode `127.0.0.1:8080`, so
-  only one can bind it. Stop the other (`nockd stop http-counter`) to run this one; the real
-  fix is upstream PR #134's `HTTP_PORT` override (bump later, suite-wide).
+- **D. (RESOLVED by PR #134.)** Two library-driver apps used to be unable to share local mode —
+  both hardcoded `127.0.0.1:8080`. The driver now reads `HTTP_PORT` and binds it directly, so
+  each app binds its own port and they run simultaneously. No more `nockd stop` dance, no proxy.
 
-Everything from http-counter's RECIPE (rough edges A/B/C) and chain-watch's (1–8) still applies
-unchanged — except that **project-mode deploy now works** on this nockd, so we use it instead of
-the prebuilt fallback.
+Everything from http-counter's RECIPE (rough edges A-resolved/B/C) and chain-watch's (1–8) still
+applies unchanged — and project-mode deploy works on this nockd, so we use it.
