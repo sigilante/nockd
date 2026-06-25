@@ -13,6 +13,7 @@ mod dashboard;
 mod health;
 mod nockchain;
 mod registry;
+mod resources;
 mod store;
 mod supervisor;
 mod tui;
@@ -25,6 +26,22 @@ use clap::Parser;
 
 use cli::{Cli, Commands};
 use client::Client;
+
+/// Compact human-readable byte size for the `ps` RSS column (e.g. "48M", "1.2G").
+fn fmt_bytes(n: u64) -> String {
+    const U: [&str; 5] = ["B", "K", "M", "G", "T"];
+    let mut v = n as f64;
+    let mut i = 0;
+    while v >= 1024.0 && i < U.len() - 1 {
+        v /= 1024.0;
+        i += 1;
+    }
+    if i == 0 {
+        format!("{n}{}", U[0])
+    } else {
+        format!("{v:.1}{}", U[i])
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -205,10 +222,20 @@ async fn main() -> Result<()> {
                 return Ok(());
             }
             println!(
-                "{:<16} {:<10} {:<10} {:<10} {:<8} {:<18} {}",
-                "NAME", "STATE", "HEALTH", "VERIFIED", "PID", "ENDPOINT", "STATUS"
+                "{:<16} {:<10} {:<10} {:<10} {:<8} {:<6} {:<9} {:<18} {}",
+                "NAME", "STATE", "HEALTH", "VERIFIED", "PID", "CPU", "RSS", "ENDPOINT", "STATUS"
             );
             for a in apps {
+                let (cpu, rss) = a
+                    .runtime
+                    .as_ref()
+                    .map(|rt| {
+                        (
+                            rt.cpu_pct.map(|c| format!("{c:.0}%")).unwrap_or_else(|| "—".into()),
+                            rt.rss_bytes.map(fmt_bytes).unwrap_or_else(|| "—".into()),
+                        )
+                    })
+                    .unwrap_or_else(|| ("—".into(), "—".into()));
                 let (state, health, pid) = match &a.runtime {
                     Some(rt) => (
                         format!("{:?}", rt.state).to_lowercase(),
@@ -227,12 +254,14 @@ async fn main() -> Result<()> {
                     })
                     .unwrap_or_default();
                 println!(
-                    "{:<16} {:<10} {:<10} {:<10} {:<8} {:<18} {}",
+                    "{:<16} {:<10} {:<10} {:<10} {:<8} {:<6} {:<9} {:<18} {}",
                     a.name,
                     state,
                     health,
                     a.verified,
                     pid,
+                    cpu,
+                    rss,
                     a.endpoint.unwrap_or_else(|| "—".into()),
                     status_line,
                 );

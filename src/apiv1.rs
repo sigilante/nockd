@@ -34,6 +34,8 @@ pub struct AppV1 {
     pub restart_count: u32,
     pub uptime_s: Option<i64>,
     pub state_size_bytes: Option<u64>, // not yet sampled
+    pub cpu_pct: Option<f32>,          // % of one core (top convention), sampled ~5s
+    pub rss_bytes: Option<u64>,        // resident memory; the OOM-watch metric (OQ8)
     pub template: Option<String>,      // not yet recorded
     pub health: String,                // serving | notserving | unreachable | unknown
     pub chain_attach: Option<String>,  // not yet probed
@@ -93,6 +95,8 @@ fn to_app_v1(row: AppRow, rt: Option<RuntimeStatus>, prev_artifact: Option<Strin
         restart_count: rt.as_ref().map(|r| r.restarts).unwrap_or(0),
         uptime_s,
         state_size_bytes: None,
+        cpu_pct: rt.as_ref().and_then(|r| r.cpu_pct),
+        rss_bytes: rt.as_ref().and_then(|r| r.rss_bytes),
         template: None,
         health,
         chain_attach: None,

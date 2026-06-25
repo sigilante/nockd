@@ -73,6 +73,16 @@ const appIcon = (a, cls = '') => a.has_icon
   ? `<img class="appicon ${cls}" src="/api/v1/apps/${encodeURIComponent(a.name)}/icon?v=${a.updated_at}" alt="" loading="lazy">`
   : '';
 
+// Human-readable byte size (RSS). Binary units, one decimal past KB.
+function fmtBytes(n) {
+  if (n == null) return '—';
+  if (n < 1024) return `${n} B`;
+  const u = ['KB', 'MB', 'GB', 'TB'];
+  let v = n / 1024, i = 0;
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(1)} ${u[i]}`;
+}
+
 function fmtUptime(s) {
   if (s == null) return '—';
   if (s < 60) return `${s}s`;
@@ -184,13 +194,14 @@ function fleetView() {
           <span>${a.status_line ? esc(a.status_line) : (a.status === 'crashing' ? `${a.restart_count} rst` : fmtUptime(a.uptime_s))}</span>
         </div>
         <div class="body">
-          <div class="tname">${appIcon(a)}${esc(a.name)}</div>
+          <div class="tname">${appIcon(a)}${esc(a.name)}${appLink(a) ? ` <a class="relay-mini" href="${esc(appLink(a))}" target="_blank" rel="noopener" title="Open ${esc(appLink(a))}">↗</a>` : ''}</div>
           <div class="meta">${esc(a.artifact_hash ? a.artifact_hash.slice(0, 18) + '…' : '—')}</div>
           <div class="meta">${esc(a.endpoint_name || 'no endpoint')}</div>
           <div class="tfoot"><span>up ${fmtUptime(a.uptime_s)}</span>${vfy(a.verified)}</div>
         </div>
       </div>`);
-      t.onclick = () => location.hash = `#/app/${encodeURIComponent(a.name)}`;
+      // Let the relay ↗ open in a new tab without navigating the tile to detail.
+      t.onclick = (e) => { if (e.target.closest('a')) return; location.hash = `#/app/${encodeURIComponent(a.name)}`; };
       grid.append(t);
     }
     grid.append($(`<div class="tile deploy"><span class="plus">+ DEPLOY APP</span></div>`));
@@ -264,7 +275,10 @@ function detailView(name) {
           <div class="kv" style="color:var(--cream)"><span class="k" style="color:rgba(243,237,225,.7)">health</span> ${esc(a.health)}</div>
           <div class="kv" style="color:var(--cream)"><span class="k" style="color:rgba(243,237,225,.7)">page</span> ${appLink(a) ? `<a class="relay-inline" href="${esc(appLink(a))}" target="_blank" rel="noopener">${esc(appLink(a))} ↗</a>` : '— none —'}</div>
         </div>
-        <div class="panel"><h3>Resources</h3><div class="kv muted">CPU / RSS sampling lands with metrics (DESIGN OQ8).</div></div>
+        <div class="panel"><h3>Resources</h3>
+          <div class="kv"><span class="k">cpu</span> ${a.cpu_pct != null ? a.cpu_pct.toFixed(1) + '%' : '—'}</div>
+          <div class="kv"><span class="k">rss</span> ${a.rss_bytes != null ? fmtBytes(a.rss_bytes) : '—'}</div>
+        </div>
       </div>
     </div>`);
     app.append(body);

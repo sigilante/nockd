@@ -206,6 +206,38 @@ pub async fn serve(daemon: Arc<Daemon>, host: IpAddr, port: u16) -> Result<()> {
         }
     });
 
+    // Background resource-sampler loop (DESIGN OQ8): sample CPU%/RSS of every running app's
+    // pid and stash the latest on its RuntimeStatus. CPU% is a delta across ticks, so the
+    // persistent Sampler must live across iterations.
+    let rp = daemon.clone();
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(Duration::from_secs(5));
+        loop {
+            tick.tick().await;
+            let apps = match rp.registry.list_apps() {
+                Ok(a) => a,
+                Err(_) => continue,
+            };
+            // (name, pid) for currently-running apps.
+            let live: Vec<(String, u32)> = apps
+                .iter()
+                .filter_map(|a| rp.supervisor.status(&a.name).and_then(|s| s.pid).map(|p| (a.name.clone(), p)))
+                .collect();
+            let pids: Vec<u32> = live.iter().map(|(_, p)| *p).collect();
+            // sample() scans the process table and sleeps ~300ms; keep it off the async runtime.
+            let samples = match tokio::task::spawn_blocking(move || crate::resources::sample(&pids)).await {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            for (name, pid) in &live {
+                match samples.get(pid) {
+                    Some((cpu, rss)) => rp.supervisor.set_resources(name, Some(*cpu), Some(*rss)),
+                    None => rp.supervisor.set_resources(name, None, None),
+                }
+            }
+        }
+    });
+
     let app = crate::api::router(daemon.clone());
     let listener = TcpListener::bind((host, port))
         .await

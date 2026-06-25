@@ -44,6 +44,9 @@ struct Managed {
     health: HealthState,
     /// Latest custom status line from the app's configured status command (e.g. block height).
     status_line: Option<String>,
+    /// Latest resource sample (CPU%, RSS bytes) for the supervised pid, from the sampler loop.
+    cpu_pct: Option<f32>,
+    rss_bytes: Option<u64>,
     /// When set, we have sent SIGTERM and are awaiting graceful exit; past the deadline we
     /// escalate to SIGKILL. Distinguishes intentional termination from a crash in the reap.
     term_deadline: Option<i64>,
@@ -63,6 +66,8 @@ impl Default for Managed {
             state: RunState::Stopped,
             health: HealthState::Unknown,
             status_line: None,
+            cpu_pct: None,
+            rss_bytes: None,
             term_deadline: None,
             restart_requested: false,
         }
@@ -77,6 +82,8 @@ pub struct RuntimeStatus {
     pub restarts: u32,
     pub health: HealthState,
     pub status_line: Option<String>,
+    pub cpu_pct: Option<f32>,
+    pub rss_bytes: Option<u64>,
 }
 
 pub struct Supervisor {
@@ -109,6 +116,8 @@ impl Supervisor {
             restarts: m.restarts,
             health: m.health,
             status_line: m.status_line.clone(),
+            cpu_pct: m.cpu_pct,
+            rss_bytes: m.rss_bytes,
         })
     }
 
@@ -125,6 +134,16 @@ impl Supervisor {
         let mut procs = self.procs.lock().unwrap();
         if let Some(m) = procs.get_mut(name) {
             m.status_line = line;
+        }
+    }
+
+    /// Record the latest resource sample for an app (from the sampler loop). Clears to None
+    /// when the pid is gone (passed as None) so a stopped app doesn't show a stale reading.
+    pub fn set_resources(&self, name: &str, cpu_pct: Option<f32>, rss_bytes: Option<u64>) {
+        let mut procs = self.procs.lock().unwrap();
+        if let Some(m) = procs.get_mut(name) {
+            m.cpu_pct = cpu_pct;
+            m.rss_bytes = rss_bytes;
         }
     }
 
