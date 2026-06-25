@@ -183,6 +183,14 @@ a.btn.relay:hover { background: var(--ink); border-color: var(--ink); }
    detail header. object-fit keeps non-square source images from distorting. */
 .appicon { width: 20px; height: 20px; object-fit: contain; vertical-align: middle; margin-right: 9px; border: 2px solid var(--ink); background: var(--paper); }
 .appicon.big { width: 34px; height: 34px; margin-right: 4px; }
+/* Deploy history list in the Artifact panel. */
+.hist { margin-top: 10px; border-top: 2px solid var(--ink); padding-top: 8px; }
+.hrow { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; }
+.hrow.cur { font-weight: 700; }
+.hdot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-muted); flex: none; }
+.hdot.ok { background: var(--blue); } .hdot.bad { background: var(--red); }
+.hcur { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--blue); }
+.hwhen { margin-left: auto; color: var(--ink-muted); font-family: var(--mono); font-size: 11px; }
 
 .grid2 { display: grid; grid-template-columns: 1.55fr 1fr; gap: 6px; background: var(--ink); padding: 6px; }
 .col { display: flex; flex-direction: column; gap: 6px; }

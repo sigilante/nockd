@@ -89,6 +89,7 @@ pub fn router(daemon: Arc<Daemon>) -> Router {
         .route("/api/apps", get(list_apps).post(deploy))
         .route("/api/apps/:name/restart", post(restart))
         .route("/api/apps/:name/reload", post(reload))
+        .route("/api/apps/:name/rollback", post(rollback))
         .route("/api/apps/:name/stop", post(stop))
         .route("/api/apps/:name/start", post(start))
         .route("/api/apps/:name/logs", get(logs))
@@ -97,10 +98,12 @@ pub fn router(daemon: Arc<Daemon>) -> Router {
         .route("/api/v1/apps", get(apiv1::list_apps))
         .route("/api/v1/apps/:name", get(apiv1::get_app))
         .route("/api/v1/apps/:name/events", get(apiv1::app_events))
+        .route("/api/v1/apps/:name/history", get(app_history))
         .route("/api/v1/apps/:name/icon", get(app_icon))
         .route("/api/v1/apps/:name/logs", get(apiv1::logs_sse)) // SSE (follow)
         .route("/api/v1/apps/:name/restart", post(restart))
         .route("/api/v1/apps/:name/reload", post(reload))
+        .route("/api/v1/apps/:name/rollback", post(rollback))
         .route("/api/v1/apps/:name/stop", post(stop))
         .route("/api/v1/apps/:name/start", post(start))
         .route("/api/v1/events", get(apiv1::events_sse)) // SSE (follow)
@@ -198,12 +201,17 @@ async fn deploy(
         req.manifest_path.as_deref(),
         req.icon.as_deref(),
     )?;
+    d.registry.record_deploy(&req.name, &rec.artifact_hash)?;
     d.registry.add_event(
         &req.name,
         "deploy",
         &format!("artifact {}", &rec.artifact_hash[..16.min(rec.artifact_hash.len())]),
     )?;
 
+    // Apply the deploy to a running instance: reconcile alone won't swap a live process for the
+    // new artifact/config, so request a graceful restart (a no-op if the app isn't running —
+    // then reconcile starts it fresh). Without this, a redeploy silently kept the old version.
+    d.supervisor.request_restart(&req.name);
     // Start it now rather than waiting for the next tick.
     d.reconcile();
 
@@ -281,6 +289,44 @@ async fn reload(
         .add_event(&name, "reload", "manifest re-read; config re-applied")?;
     d.reconcile();
     Ok(Json(OkResponse { ok: true }))
+}
+
+/// Revert an app to the previous distinct artifact it ran (its bytes are still in the content
+/// store) and restart. Config (args/port/endpoint/…) is left as-is — this reverts the code,
+/// not the deploy settings. 409 if there's no earlier artifact to roll back to.
+async fn rollback(
+    State(d): State<Arc<Daemon>>,
+    Path(name): Path<String>,
+) -> Result<Json<OkResponse>, ApiError> {
+    let app = d.registry.get_app(&name)?.ok_or_else(|| ApiError::not_found(&name))?;
+    let prev = d
+        .registry
+        .previous_artifact(&name, &app.artifact_hash)?
+        .ok_or_else(|| {
+            ApiError::conflict("no previous artifact to roll back to — only one has been deployed")
+        })?;
+    d.registry.set_app_artifact(&name, &prev)?;
+    d.registry.record_deploy(&name, &prev)?;
+    d.registry.set_desired(&name, "running")?;
+    d.supervisor.request_restart(&name);
+    d.registry.add_event(
+        &name,
+        "rollback",
+        &format!("rolled back to artifact {}", &prev[..16.min(prev.len())]),
+    )?;
+    d.reconcile();
+    Ok(Json(OkResponse { ok: true }))
+}
+
+/// Recent deploy history for an app (newest first), for the dashboard's Artifact panel.
+async fn app_history(
+    State(d): State<Arc<Daemon>>,
+    Path(name): Path<String>,
+) -> Result<Json<Vec<crate::registry::DeployHistoryRow>>, ApiError> {
+    if d.registry.get_app(&name)?.is_none() {
+        return Err(ApiError::not_found(&name));
+    }
+    Ok(Json(d.registry.deploy_history(&name, 20)?))
 }
 
 /// Serve an app's icon (decoded from its stored `data:` URI) with a content-type + cache
@@ -443,6 +489,13 @@ impl ApiError {
     fn bad_request(message: &str) -> Self {
         ApiError {
             status: StatusCode::BAD_REQUEST,
+            message: message.to_string(),
+        }
+    }
+
+    fn conflict(message: &str) -> Self {
+        ApiError {
+            status: StatusCode::CONFLICT,
             message: message.to_string(),
         }
     }

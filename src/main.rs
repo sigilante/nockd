@@ -392,6 +392,11 @@ async fn main() -> Result<()> {
             println!("reloaded {name} (manifest re-read; config re-applied)");
         }
 
+        Commands::Rollback { name } => {
+            Client::new(&cli.host, cli.port).action(&name, "rollback").await?;
+            println!("rolled back {name} to the previous artifact");
+        }
+
         Commands::Stop { name } => {
             Client::new(&cli.host, cli.port).action(&name, "stop").await?;
             println!("stopped {name}");

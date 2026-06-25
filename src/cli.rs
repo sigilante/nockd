@@ -161,6 +161,10 @@ pub enum Commands {
     /// restart), then restart it. Does NOT rebuild — for that, `nockd deploy -f` again.
     Reload { name: String },
 
+    /// Roll an app back to the previous artifact it ran (reverts code, keeps config), then
+    /// restart. Fails if only one artifact has been deployed.
+    Rollback { name: String },
+
     /// Stop an app (keeps it deployed).
     Stop { name: String },
 

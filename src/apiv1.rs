@@ -68,7 +68,7 @@ fn derive_status(row: &AppRow, rt: Option<&RuntimeStatus>) -> String {
     .to_string()
 }
 
-fn to_app_v1(row: AppRow, rt: Option<RuntimeStatus>) -> AppV1 {
+fn to_app_v1(row: AppRow, rt: Option<RuntimeStatus>, prev_artifact: Option<String>) -> AppV1 {
     let status = derive_status(&row, rt.as_ref());
     let uptime_s = rt.as_ref().and_then(|r| {
         if r.state == RunState::Running && r.started_at > 0 {
@@ -87,7 +87,7 @@ fn to_app_v1(row: AppRow, rt: Option<RuntimeStatus>) -> AppV1 {
         desired_status: row.desired_status,
         artifact_hash: row.artifact_hash,
         kernel_hash: (!row.kernel_hash.is_empty()).then_some(row.kernel_hash),
-        prev_artifact: None,
+        prev_artifact,
         endpoint_name: row.endpoint,
         restart_policy: row.restart_policy,
         restart_count: rt.as_ref().map(|r| r.restarts).unwrap_or(0),
@@ -117,7 +117,8 @@ pub async fn list_apps(State(d): State<Arc<Daemon>>) -> impl IntoResponse {
         .into_iter()
         .map(|row| {
             let rt = d.supervisor.status(&row.name);
-            to_app_v1(row, rt)
+            let prev = d.registry.previous_artifact(&row.name, &row.artifact_hash).unwrap_or(None);
+            to_app_v1(row, rt, prev)
         })
         .collect();
     Json(apps).into_response()
@@ -127,7 +128,8 @@ pub async fn get_app(State(d): State<Arc<Daemon>>, Path(name): Path<String>) -> 
     match d.registry.get_app(&name) {
         Ok(Some(row)) => {
             let rt = d.supervisor.status(&row.name);
-            Json(to_app_v1(row, rt)).into_response()
+            let prev = d.registry.previous_artifact(&row.name, &row.artifact_hash).unwrap_or(None);
+            Json(to_app_v1(row, rt, prev)).into_response()
         }
         Ok(None) => (axum::http::StatusCode::NOT_FOUND, format!("no such app: {name}"))
             .into_response(),

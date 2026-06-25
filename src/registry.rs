@@ -59,6 +59,15 @@ pub struct EventRow {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct DeployHistoryRow {
+    pub artifact_hash: String,
+    pub kernel_hash: Option<String>,
+    pub verified_status: Option<String>,
+    pub deployed_at: i64,
+    pub current: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct EndpointRow {
     pub name: String,
     pub url: String,
@@ -114,6 +123,14 @@ impl Registry {
                 url        TEXT NOT NULL,
                 kind       TEXT NOT NULL,          -- remote | local-socket
                 created_at INTEGER NOT NULL
+            );
+            -- Append-only log of which artifact each app ran, in order. Powers rollback (revert
+            -- to the previous distinct artifact — its bytes are still in the content store).
+            CREATE TABLE IF NOT EXISTS deploy_history (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                app_name      TEXT NOT NULL,
+                artifact_hash TEXT NOT NULL,
+                deployed_at   INTEGER NOT NULL
             );
             "#,
         )
@@ -206,6 +223,78 @@ impl Registry {
             rusqlite::params![name, endpoint, restart_policy, args_json, admin_addr, status_cmd, status_label, port, icon, now_secs()],
         )?;
         Ok(n > 0)
+    }
+
+    /// Append a deploy-history entry (the app now runs `artifact_hash`). Called on every
+    /// deploy and rollback so the history reflects the actual sequence of artifacts run.
+    pub fn record_deploy(&self, name: &str, artifact_hash: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO deploy_history (app_name, artifact_hash, deployed_at) VALUES (?1, ?2, ?3)",
+            rusqlite::params![name, artifact_hash, now_secs()],
+        )?;
+        Ok(())
+    }
+
+    /// The most recent artifact this app ran that differs from `current` — the rollback target.
+    /// None if the app has only ever run one distinct artifact.
+    pub fn previous_artifact(&self, name: &str, current: &str) -> Result<Option<String>> {
+        let conn = self.conn.lock().unwrap();
+        let hash = conn
+            .query_row(
+                "SELECT artifact_hash FROM deploy_history
+                 WHERE app_name = ?1 AND artifact_hash != ?2
+                 ORDER BY id DESC LIMIT 1",
+                rusqlite::params![name, current],
+                |row| row.get::<_, String>(0),
+            )
+            .ok();
+        Ok(hash)
+    }
+
+    /// Point an app at a different (already-stored) artifact, without touching its config.
+    /// Used by rollback; the kernel_hash follows via the artifact join.
+    pub fn set_app_artifact(&self, name: &str, artifact_hash: &str) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let n = conn.execute(
+            "UPDATE app SET artifact_hash=?2, updated_at=?3 WHERE name=?1",
+            rusqlite::params![name, artifact_hash, now_secs()],
+        )?;
+        Ok(n > 0)
+    }
+
+    /// Recent deploy history for an app (newest first), annotated with the current artifact and
+    /// each artifact's kernel/verification. Consecutive duplicate artifacts are collapsed.
+    pub fn deploy_history(&self, name: &str, limit: usize) -> Result<Vec<DeployHistoryRow>> {
+        let conn = self.conn.lock().unwrap();
+        let current: Option<String> = conn
+            .query_row(
+                "SELECT artifact_hash FROM app WHERE name = ?1",
+                [name],
+                |r| r.get(0),
+            )
+            .ok();
+        let mut stmt = conn.prepare(
+            "SELECT h.artifact_hash, MAX(h.deployed_at) AS at, ar.kernel_hash, ar.verified_status
+             FROM deploy_history h
+             LEFT JOIN artifact ar ON ar.hash = h.artifact_hash
+             WHERE h.app_name = ?1
+             GROUP BY h.artifact_hash
+             ORDER BY at DESC LIMIT ?2",
+        )?;
+        let rows = stmt
+            .query_map(rusqlite::params![name, limit as i64], |row| {
+                let artifact_hash: String = row.get(0)?;
+                Ok(DeployHistoryRow {
+                    current: current.as_deref() == Some(artifact_hash.as_str()),
+                    artifact_hash,
+                    deployed_at: row.get(1)?,
+                    kernel_hash: row.get(2)?,
+                    verified_status: row.get(3)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
     }
 
     pub fn set_desired(&self, name: &str, status: &str) -> Result<()> {

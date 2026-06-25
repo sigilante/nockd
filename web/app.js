@@ -224,6 +224,7 @@ function detailView(name) {
         <div class="actions">
           ${appLink(a) ? `<a class="btn relay" href="${esc(appLink(a))}" target="_blank" rel="noopener" title="Open ${esc(appLink(a))}">Open app ↗</a>` : ''}
           <button class="btn" data-act="reload" title="${a.manifest_path ? `Re-read ${esc(a.manifest_path)} and re-apply its config (no rebuild)` : 'Deploy once with `nockd deploy -f nockd.toml` to enable Reload'}">Reload</button>
+          <button class="btn" data-act="rollback" data-confirm="Roll back ${esc(a.name)} to the previous artifact (${a.prev_artifact ? shortHash(a.prev_artifact) : '—'})?" title="${a.prev_artifact ? `Revert to ${shortHash(a.prev_artifact)} and restart` : 'No previous artifact to roll back to yet'}">Rollback</button>
           <button class="btn" data-act="restart">Restart</button>
           <button class="btn" data-act="start">Start</button>
           <button class="btn danger" data-act="stop">Stop</button>
@@ -231,8 +232,10 @@ function detailView(name) {
       </div>`);
     head.querySelectorAll('[data-act]').forEach((b) =>
       b.onclick = async () => {
+        // Confirm destructive/state-changing actions (rollback) before firing.
+        if (b.dataset.confirm && !confirm(b.dataset.confirm)) return;
         const r = await post(`/api/v1/apps/${encodeURIComponent(name)}/${b.dataset.act}`);
-        // Surface failures (e.g. Reload when the manifest is missing) instead of silently no-op.
+        // Surface failures (e.g. Reload with no manifest, Rollback with no history).
         if (!r.ok) { banner(`${b.dataset.act} failed — ${await r.text()}`); setTimeout(clearBanner, 6000); }
         setTimeout(render, 400);
       });
@@ -252,6 +255,8 @@ function detailView(name) {
           <div class="kv"><span class="k">current</span> ${esc(a.artifact_hash || '—')}</div>
           ${a.kernel_hash ? `<div class="kv"><span class="k">kernel</span> ${esc(a.kernel_hash)}</div>` : `<div class="kv muted">kernel embedded in binary</div>`}
           <div class="kv"><span class="k">verified</span> <span class="tag" style="color:var(--ink-muted)">${esc(a.verified)}</span></div>
+          ${a.prev_artifact ? `<div class="kv"><span class="k">rollback to</span> ${esc(shortHash(a.prev_artifact))}</div>` : ''}
+          <div class="hist" id="hist"><div class="kv muted">deploy history…</div></div>
         </div>
         <div class="panel attach">
           <h3>Attachment</h3>
@@ -265,7 +270,27 @@ function detailView(name) {
     app.append(body);
 
     await renderTimeline();
+    renderHistory();
     startLogs();
+  }
+
+  async function renderHistory() {
+    const el = document.getElementById('hist');
+    if (!el) return;
+    let hist = [];
+    try { hist = await getJSON(`/api/v1/apps/${encodeURIComponent(name)}/history`); } catch (_) {}
+    el.innerHTML = '';
+    if (!hist.length) { el.append($(`<div class="kv muted">no deploy history</div>`)); return; }
+    for (const h of hist) {
+      const when = new Date(h.deployed_at * 1000).toLocaleString();
+      const vcls = h.verified_status === 'verified' ? 'ok' : h.verified_status === 'drift' ? 'bad' : 'muted';
+      el.append($(`<div class="hrow${h.current ? ' cur' : ''}">
+        <span class="hdot ${vcls}"></span>
+        <span class="mono">${esc(shortHash(h.artifact_hash))}</span>
+        ${h.current ? '<span class="hcur">current</span>' : ''}
+        <span class="hwhen">${esc(when)}</span>
+      </div>`));
+    }
   }
 
   async function renderTimeline() {
