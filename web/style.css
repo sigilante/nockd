@@ -191,6 +191,10 @@ a.btn.relay:hover { background: var(--ink); border-color: var(--ink); }
 .hdot.ok { background: var(--blue); } .hdot.bad { background: var(--red); }
 .hcur { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--blue); }
 .hwhen { margin-left: auto; color: var(--ink-muted); font-family: var(--mono); font-size: 11px; }
+/* Metrics screen: relative-memory bar under each app's RSS number. */
+.rssbar { height: 6px; background: var(--track); margin-top: 5px; min-width: 120px; }
+.rssfill { height: 100%; background: var(--blue); }
+tr.idle .rssfill { background: var(--ink-muted); }
 
 .grid2 { display: grid; grid-template-columns: 1.55fr 1fr; gap: 6px; background: var(--ink); padding: 6px; }
 .col { display: flex; flex-direction: column; gap: 6px; }

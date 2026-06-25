@@ -435,6 +435,59 @@ function endpointsView() {
   return () => clearInterval(timer);
 }
 
+// ---- Metrics (fleet-wide resource overview) ----
+function metricsView() {
+  let timer = null, es = null;
+
+  async function render() {
+    let apps;
+    try { apps = await getJSON('/api/v1/apps'); clearBanner(); }
+    catch (e) { banner(`daemon unreachable — ${e.message}`); return; }
+
+    const running = apps.filter((a) => a.status !== 'stopped');
+    const totRss = apps.reduce((s, a) => s + (a.rss_bytes || 0), 0);
+    const totCpu = apps.reduce((s, a) => s + (a.cpu_pct || 0), 0);
+    const maxRss = Math.max(1, ...apps.map((a) => a.rss_bytes || 0));
+    const sorted = apps.slice().sort((a, b) => (b.rss_bytes || 0) - (a.rss_bytes || 0));
+    const heaviest = sorted[0];
+
+    app.innerHTML = '';
+    app.append($(`
+      <div class="stats">
+        <div class="stat"><div class="num">${running.length}</div><div class="lab">Running</div></div>
+        <div class="stat blue"><div class="num">${fmtBytes(totRss)}</div><div class="lab">Total RSS</div></div>
+        <div class="stat yellow"><div class="num">${totCpu.toFixed(0)}%</div><div class="lab">Total CPU</div></div>
+        <div class="stat red"><div class="num">${heaviest && heaviest.rss_bytes ? esc(heaviest.name) : '—'}</div><div class="lab">Heaviest · ${heaviest && heaviest.rss_bytes ? fmtBytes(heaviest.rss_bytes) : '—'}</div></div>
+      </div>`));
+    app.append($(`<div class="toolbar"><div class="summary">Live per-app resource use · sampled every 5s · sorted by memory (OOM watch)</div></div>`));
+
+    const wrap = $(`<table class="table"><thead><tr>
+      <th></th><th>App</th><th>CPU</th><th>Memory (RSS)</th><th>Status</th></tr></thead><tbody></tbody></table>`);
+    const tb = wrap.querySelector('tbody');
+    for (const a of sorted) {
+      const rss = a.rss_bytes || 0;
+      const pct = Math.round((rss / maxRss) * 100);
+      const idle = a.status === 'stopped';
+      const tr = $(`<tr class="${idle ? 'idle' : ''}">
+        <td>${glyph(a.status)}</td>
+        <td class="cell-app">${appIcon(a)}${esc(a.name)}</td>
+        <td class="mono">${a.cpu_pct != null ? a.cpu_pct.toFixed(1) + '%' : '—'}</td>
+        <td><div class="mono">${a.rss_bytes != null ? fmtBytes(rss) : '—'}</div>
+            <div class="rssbar"><div class="rssfill" style="width:${pct}%"></div></div></td>
+        <td><span class="status-word ${statusClass(a.status)}">${esc(a.status)}</span></td>
+      </tr>`);
+      tr.onclick = () => location.hash = `#/app/${encodeURIComponent(a.name)}`;
+      tb.append(tr);
+    }
+    app.append(wrap);
+  }
+
+  render();
+  timer = setInterval(render, 2500);
+  try { es = new EventSource('/api/v1/events'); es.onmessage = () => render(); es.onerror = () => {}; } catch (_) {}
+  return () => { clearInterval(timer); es && es.close(); };
+}
+
 // ---- Placeholder views (screens that land with their backend feature) ----
 function placeholderView(title, sub) {
   app.innerHTML = '';
@@ -453,6 +506,7 @@ function route() {
   setActiveNav(h);
   if (h.startsWith('#/app/')) return setView(() => detailView(decodeURIComponent(h.slice(6))));
   switch (h) {
+    case '#/metrics': return setView(metricsView);
     case '#/endpoints': return setView(endpointsView);
     case '#/secrets': return setView(() => placeholderView('SECRETS', 'Metadata-only secrets management lands with the encrypted secrets store (DESIGN OQ5). Values are never rendered.'));
     case '#/verify': return setView(() => placeholderView('VERIFY', 'Reproducible-build verification lands with signed attestations (DESIGN OQ2 / strict-both).'));
