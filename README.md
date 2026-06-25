@@ -215,9 +215,27 @@ Named Nockchain RPC targets, with live reachability + lag + chain height. Apps r
 endpoint **by name**, so the URL can change without redeploying.
 
 ```sh
-nockd endpoint add mainnet-rpc http://<host>:5555
+nockd endpoint add mainnet-rpc https://rpc.nockchain.net
 nockd endpoint ls            # NAME · REACH · URL · LAG · HEIGHT · BEHIND · APPS
 nockd endpoint rm mainnet-rpc
+```
+
+**Public endpoints to start with** — register any of these, then attach apps to them by name.
+Reachability and chain height vary; `nockd endpoint ls` and the dashboard ENDPOINTS screen show
+each one live.
+
+| Suggested name | URL | Notes |
+|----------------|-----|-------|
+| `mainnet-rpc`  | `https://rpc.nockchain.net`     | Canonical public Nockchain RPC (TLS). |
+| `nockbox`      | `https://rpc.nockbox.org`       | Community public RPC (TLS). |
+| `nockblocks`   | `https://nockblocks.com/rpc/v1` | Community endpoint. |
+| `zorp`         | `http://23.252.122.18:5556`     | Zorp public node (plain gRPC, no TLS). |
+
+```sh
+nockd endpoint add mainnet-rpc https://rpc.nockchain.net
+nockd endpoint add nockbox     https://rpc.nockbox.org
+# deploy several chain-watchers, one per endpoint, to compare lag/height:
+#   in each app's nockd.toml:  endpoint = "mainnet-rpc"   (or --endpoint mainnet-rpc)
 ```
 
 Reachability is a real gRPC handshake + health check (true round-trip latency), and for
