@@ -38,17 +38,20 @@ you only deploy **prebuilt** artifacts you don't need nockup at all.
 ## Quickstart — deploy your first NockApp
 
 A NockApp you can deploy is a project directory containing a build manifest (`nockapp.toml`)
-and a deploy manifest (`nockd.toml`). Ready-made examples live in
-**[sigilante/nockapps-pack](https://github.com/sigilante/nockapps-pack)** (blog, minesweeper,
-a price API, a chain-height watcher, …) — grab one to start.
+and a deploy manifest (`nockd.toml`). Ready-made ones live in the **NockApp Pack** — grab it
+and pick an app (see [Get apps](#get-apps-the-nockapp-pack) below).
 
 ```sh
+# 0. Get the pack of ready-to-deploy NockApps.
+git clone https://github.com/sigilante/nockapp-pack
+cd nockapp-pack
+
 # 1. Start the daemon (dashboard + API on http://127.0.0.1:4490).
 nockd serve &
 
 # 2. Deploy an app from its directory. project-mode builds it with nockup, then ships +
 #    runs the artifact. nockd.toml carries all the config (see below).
-cd nockapps-pack/minesweeper
+cd minesweeper
 nockd deploy -f nockd.toml
 
 # 3. Watch it.
@@ -61,6 +64,36 @@ its tile shows an **"Open app ↗"** link straight to the running page.
 
 That's the whole loop: write/grab an app → `nockd deploy -f nockd.toml` → it's a supervised
 service with crash-restart, health, logs, metrics, and one-click rollback.
+
+---
+
+## Get apps: the NockApp Pack
+
+The **[NockApp Pack](https://github.com/sigilante/nockapp-pack)** (`sigilante/nockapp-pack`) is
+a curated set of ready-to-deploy NockApps — a blog, minesweeper, an HTTP counter, a static
+server, a token-price API, a Nockchain chain-height watcher, and more. Each is a self-contained
+project with its own `nockd.toml`, deployable in one command. "Installing" an app is just:
+clone the pack, then deploy the ones you want.
+
+```sh
+git clone https://github.com/sigilante/nockapp-pack
+cd nockapp-pack
+
+# deploy a single app (project-mode builds it via nockup, then ships + runs it):
+cd minesweeper && nockd deploy -f nockd.toml && cd ..
+
+# …or stand up several at once:
+for app in minesweeper http-counter common-blog; do
+  ( cd "$app" && nockd deploy -f nockd.toml )
+done
+
+nockd ps        # see them all
+```
+
+Building these from source needs the **nockup** toolchain (see [Install](#install)); each app
+also pins the Rust nightly it needs via a `rust-toolchain.toml`. The HTTP apps (blog,
+minesweeper, counter, static) declare a `port`, so the dashboard shows an **"Open app ↗"**
+relay link to each running page.
 
 ---
 
